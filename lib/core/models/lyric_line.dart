@@ -1,9 +1,10 @@
-/// One lyrics token: either a syllable or a structural measure bar.
+/// One lyrics token: a syllable, a structural measure bar, or a continuation.
 class LyricToken {
   final int line;
   final int elementIndex;
   final String rawText;
   final bool isMeasureBar;
+  final bool isContinuation;
   final String? syllable;
 
   const LyricToken({
@@ -11,11 +12,15 @@ class LyricToken {
     required this.elementIndex,
     required this.rawText,
     required this.isMeasureBar,
+    this.isContinuation = false,
     this.syllable,
   });
 
   bool get isSyllable =>
-      !isMeasureBar && syllable != null && syllable!.isNotEmpty;
+      !isMeasureBar &&
+      !isContinuation &&
+      syllable != null &&
+      syllable!.isNotEmpty;
 }
 
 /// One lyrics line after tokenization.

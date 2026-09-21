@@ -2,6 +2,7 @@ import '../models/lyric_line.dart';
 import '../models/music_token.dart';
 import '../models/score.dart';
 import '../models/validation_message.dart';
+import '../syntax/jianpu_syntax.dart';
 
 /// Global lyric-count check. Conversion still produces output.
 class ScoreValidation {
@@ -18,6 +19,7 @@ class ScoreValidation {
 class ScoreValidator {
   static const missingLyricsMessage = '歌词少于可对应音符数量，部分音符没有歌词。';
   static const extraLyricsMessage = '歌词数量多于可对应的音符。';
+  static const ignoredLeadingContinuationMessage = '歌词延续标记 `-` 没有可延续的歌词，已忽略。';
 
   const ScoreValidator();
 
@@ -26,35 +28,77 @@ class ScoreValidator {
     required List<LyricLine> lyricLines,
   }) {
     final noteCount = _consumableNoteCount(score);
-    final syllables = [
-      for (final line in lyricLines) ...line.syllables,
+    final walked = _walkLyricSlots(lyricLines);
+    final slots = walked.slots;
+    final warnings = <ValidationMessage>[
+      if (walked.ignoredLeadingContinuation)
+        const ValidationMessage(
+          line: 0,
+          message: ignoredLeadingContinuationMessage,
+        ),
     ];
-    final lyricCount = syllables.length;
 
-    // Empty or whitespace-only lyrics are "no lyrics provided".
-    if (lyricCount == 0) {
-      return const ScoreValidation();
+    // No syllables and no valid continuations: skip count warnings.
+    if (slots.isEmpty) {
+      return ScoreValidation(warnings: warnings);
     }
 
-    if (lyricCount == noteCount) {
-      return const ScoreValidation();
+    if (slots.length == noteCount) {
+      return ScoreValidation(warnings: warnings);
     }
 
-    if (lyricCount < noteCount) {
-      return const ScoreValidation(
+    if (slots.length < noteCount) {
+      return ScoreValidation(
         warnings: [
-          ValidationMessage(line: 0, message: missingLyricsMessage),
+          ...warnings,
+          const ValidationMessage(line: 0, message: missingLyricsMessage),
         ],
       );
     }
 
     return ScoreValidation(
-      warnings: const [
-        ValidationMessage(line: 0, message: extraLyricsMessage),
+      warnings: [
+        ...warnings,
+        const ValidationMessage(line: 0, message: extraLyricsMessage),
       ],
-      unmatchedLyrics: [
-        for (final token in syllables.skip(noteCount)) token.syllable!,
-      ],
+      unmatchedLyrics: slots.skip(noteCount).toList(),
+    );
+  }
+
+  /// Syllables always occupy a slot. A continuation occupies a slot only when
+  /// a previous syllable exists. Leading continuations do not count.
+  ({List<String> slots, bool ignoredLeadingContinuation}) _walkLyricSlots(
+    List<LyricLine> lyricLines,
+  ) {
+    final slots = <String>[];
+    String? previousSyllable;
+    var ignoredLeadingContinuation = false;
+
+    for (final line in lyricLines) {
+      for (final token in line.tokens) {
+        if (token.isMeasureBar) {
+          continue;
+        }
+
+        if (token.isContinuation) {
+          if (previousSyllable != null) {
+            slots.add(JianpuSyntax.holdSymbol);
+          } else {
+            ignoredLeadingContinuation = true;
+          }
+          continue;
+        }
+
+        if (token.isSyllable) {
+          previousSyllable = token.syllable;
+          slots.add(token.syllable!);
+        }
+      }
+    }
+
+    return (
+      slots: slots,
+      ignoredLeadingContinuation: ignoredLeadingContinuation,
     );
   }
 

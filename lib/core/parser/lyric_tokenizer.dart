@@ -61,12 +61,27 @@ class LyricTokenizer {
         continue;
       }
 
+      if (raw.text == JianpuSyntax.holdSymbol) {
+        elementIndex += 1;
+        tokens.add(
+          LyricToken(
+            line: lineNumber,
+            elementIndex: elementIndex,
+            rawText: raw.text,
+            isMeasureBar: false,
+            isContinuation: true,
+          ),
+        );
+        continue;
+      }
+
       if (_isPunctuationOnly(raw.text)) {
         continue;
       }
 
-      for (final syllable in _splitSyllables(raw.text)) {
-        if (syllable.isEmpty || _isPunctuationOnly(syllable)) {
+      for (final piece in _splitLyricPieces(raw.text)) {
+        if (piece.text.isEmpty ||
+            (!piece.isContinuation && _isPunctuationOnly(piece.text))) {
           continue;
         }
         elementIndex += 1;
@@ -74,9 +89,10 @@ class LyricTokenizer {
           LyricToken(
             line: lineNumber,
             elementIndex: elementIndex,
-            rawText: syllable,
+            rawText: piece.text,
             isMeasureBar: false,
-            syllable: syllable,
+            isContinuation: piece.isContinuation,
+            syllable: piece.isContinuation ? null : piece.text,
           ),
         );
       }
@@ -84,11 +100,36 @@ class LyricTokenizer {
     return LyricLine(lineNumber: lineNumber, tokens: tokens);
   }
 
-  List<String> _splitSyllables(String text) {
-    if (text.length > 1 && _isAllCjk(text)) {
-      return _characters(text);
+  List<({String text, bool isContinuation})> _splitLyricPieces(String text) {
+    const continuation = JianpuSyntax.holdSymbol;
+    var continuationCount = 0;
+    var prefixEnd = text.length;
+    while (prefixEnd > 0 &&
+        text.substring(prefixEnd - 1, prefixEnd) == continuation) {
+      prefixEnd -= 1;
+      continuationCount += 1;
     }
-    return [text];
+    final prefix = text.substring(0, prefixEnd);
+
+    if (continuationCount > 0 && prefix.isNotEmpty && _isAllCjk(prefix)) {
+      return [
+        for (final character in _characters(prefix))
+          (text: character, isContinuation: false),
+        ...List.filled(
+          continuationCount,
+          (text: continuation, isContinuation: true),
+        ),
+      ];
+    }
+
+    if (text.length > 1 && _isAllCjk(text)) {
+      return [
+        for (final character in _characters(text))
+          (text: character, isContinuation: false),
+      ];
+    }
+
+    return [(text: text, isContinuation: false)];
   }
 
   List<String> _characters(String text) {

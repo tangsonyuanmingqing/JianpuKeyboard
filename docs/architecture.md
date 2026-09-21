@@ -29,8 +29,8 @@ Input
 
 - `models`：Score / ScoreLine / Note / Rest / Hold / MeasureBar / Lyric。V1 不引入 Measure
 - `parser`：词法拆分 + 语法分类。禁止用整段 replace 冒充解析
-- `lyrics`：全局顺序对齐。不按行重置
-- `validation`：歌词不足、歌词过多等警告
+- `lyrics`：全局顺序对齐。不按行重置。普通音节默认 1:1；合法歌词 `-` 为 continuation；无最近音节的 `-` 不消费 Note
+- `validation`：按 `lyricSlots = syllableCount + validContinuationCount` 检查歌词不足、歌词过多；无效前导 `-` 给出忽略 Warning
 - `mapping`：音区到键盘字母
 - `renderer`：结构化数据 → 纯文本
 - `converter`：串联上述步骤
@@ -63,4 +63,4 @@ Core 不得依赖 Flutter Widget、BuildContext、剪贴板或任何操作系统
 
 `column` 不得复用为元素序号。
 
-歌词不足或歌词过多都返回 `ValidationMessage` 警告，不阻止输出。多余歌词不得静默丢弃，必须保留在转换结果中。未提供歌词（空或只有空白）不进行歌词数量校验，也不产生 Warning。
+歌词不足或歌词过多都返回 `ValidationMessage` 警告，不阻止输出。多余音节或合法 continuation 不得静默丢弃，必须保留在转换结果中。完全没有歌词音节、也没有合法 continuation 时，不进行数量校验。已提供歌词时按 `lyricSlots = syllableCount + validContinuationCount` 与可消费 Note 数比较。没有最近音节的歌词 `-` 不占槽位，不进入 `unmatchedLyrics`，但必须 Warning。

@@ -48,8 +48,11 @@ class PlainTextRenderer {
     final parts = <String>[];
     for (final token in line.tokens) {
       switch (token) {
-        case Note(:final lyric) when lyric != null && lyric.isNotEmpty:
-          parts.add(lyric);
+        case Note(:final lyric, :final isLyricContinuation)
+            when lyric != null && lyric.isNotEmpty:
+          parts.add(
+            isLyricContinuation ? JianpuSyntax.holdSymbol : lyric,
+          );
         case MeasureBar():
           parts.add(JianpuSyntax.measureBar);
         default:

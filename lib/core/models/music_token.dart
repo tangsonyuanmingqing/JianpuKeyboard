@@ -13,6 +13,7 @@ class Note extends MusicToken {
   final int degree;
   final Register register;
   final String? lyric;
+  final bool isLyricContinuation;
   final String? keyboardKey;
 
   const Note({
@@ -20,11 +21,13 @@ class Note extends MusicToken {
     required this.degree,
     required this.register,
     this.lyric,
+    this.isLyricContinuation = false,
     this.keyboardKey,
   });
 
   Note copyWith({
     String? lyric,
+    bool? isLyricContinuation,
     String? keyboardKey,
   }) {
     return Note(
@@ -32,6 +35,7 @@ class Note extends MusicToken {
       degree: degree,
       register: register,
       lyric: lyric ?? this.lyric,
+      isLyricContinuation: isLyricContinuation ?? this.isLyricContinuation,
       keyboardKey: keyboardKey ?? this.keyboardKey,
     );
   }

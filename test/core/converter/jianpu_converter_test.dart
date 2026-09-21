@@ -205,6 +205,116 @@ void main() {
     );
   });
 
+  test('aligns 虫儿飞 continuations without consuming 亮 early', () {
+    const document = '''
+[谱]
+3 3 3 4 5 | 3 2 2 -
+1 1 1 2 3 | 3 7 7 -
+
+[词]
+黑 黑 的 天 空 | 低 垂 -
+亮 亮 的 繁 星 | 相 随 -
+''';
+    final result = converter.convert(scoreText: document);
+    expect(result.errors, isEmpty);
+    expect(result.warnings, isEmpty);
+    expect(result.unmatchedLyrics, isEmpty);
+    expect(
+      result.output,
+      'D D D F G | D S S -\n'
+      '黑 黑 的 天 空 | 低 垂 -\n'
+      'A A A S D | D J J -\n'
+      '亮 亮 的 繁 星 | 相 随 -',
+    );
+
+    final notes = result.score!.lines
+        .expand((line) => line.tokens)
+        .whereType<Note>()
+        .toList();
+    expect(notes.map((note) => note.lyric), [
+      '黑',
+      '黑',
+      '的',
+      '天',
+      '空',
+      '低',
+      '垂',
+      '垂',
+      '亮',
+      '亮',
+      '的',
+      '繁',
+      '星',
+      '相',
+      '随',
+      '随',
+    ]);
+    expect(notes[7].isLyricContinuation, isTrue);
+    expect(notes[8].lyric, '亮');
+    expect(notes[8].isLyricContinuation, isFalse);
+    expect(notes[15].isLyricContinuation, isTrue);
+    expect(notes[7].keyboardKey, 'S');
+  });
+
+  test(
+      'renders a lyric continuation as a hyphen without a missing-lyric warning',
+      () {
+    final result = converter.convert(
+      scoreText: '3 2 2 -',
+      lyricsText: '低 垂 -',
+    );
+
+    expect(result.errors, isEmpty);
+    expect(result.warnings, isEmpty);
+    expect(result.unmatchedLyrics, isEmpty);
+    expect(result.output, 'D S S -\n低 垂 -');
+
+    final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
+    expect(notes.map((note) => note.lyric), ['低', '垂', '垂']);
+    expect(notes[2].isLyricContinuation, isTrue);
+    expect(notes[2].keyboardKey, 'S');
+  });
+
+  test(
+      'ignores a leading lyric continuation and still aligns the next syllable',
+      () {
+    final result = converter.convert(
+      scoreText: '3 4',
+      lyricsText: '- 我',
+    );
+
+    expect(result.errors, isEmpty);
+    expect(result.output, 'D F\n我');
+    expect(
+      result.warnings.map((warning) => warning.message),
+      contains(ScoreValidator.ignoredLeadingContinuationMessage),
+    );
+    expect(result.unmatchedLyrics, isEmpty);
+
+    final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
+    expect(notes.map((note) => note.lyric), ['我', null]);
+    expect(notes.map((note) => note.isLyricContinuation), [false, false]);
+  });
+
+  test('ignores multiple leading lyric continuations without shifting lyrics',
+      () {
+    final result = converter.convert(
+      scoreText: '3 4',
+      lyricsText: '- - 我',
+    );
+
+    expect(result.errors, isEmpty);
+    expect(result.output, 'D F\n我');
+    expect(
+      result.warnings.map((warning) => warning.message),
+      contains(ScoreValidator.ignoredLeadingContinuationMessage),
+    );
+    expect(result.unmatchedLyrics, isEmpty);
+
+    final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
+    expect(notes.map((note) => note.lyric), ['我', null]);
+  });
+
   test('splits consecutive Chinese characters as a fallback', () {
     final result = converter.convert(
       scoreText: '3 4 5',

@@ -97,4 +97,74 @@ void main() {
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
   });
+
+  test(
+      'does not warn when eight notes match seven syllables and a continuation',
+      () {
+    final result = validate(
+      '3 3 3 4 5 | 3 2 2 -',
+      '黑 黑 的 天 空 | 低 垂 -',
+    );
+    expect(noteCount('3 3 3 4 5 | 3 2 2 -'), 8);
+    expect(result.warnings, isEmpty);
+    expect(result.unmatchedLyrics, isEmpty);
+  });
+
+  test('warns when eight notes have only seven syllables', () {
+    final result = validate(
+      '3 3 3 4 5 | 3 2 2 -',
+      '黑 黑 的 天 空 | 低 垂',
+    );
+    expect(result.warnings.single.message, ScoreValidator.missingLyricsMessage);
+    expect(result.unmatchedLyrics, isEmpty);
+  });
+
+  test(
+      'does not warn when one syllable and three continuations fill four notes',
+      () {
+    final result = validate('3 4 5 6', '我 - - -');
+    expect(result.warnings, isEmpty);
+    expect(result.unmatchedLyrics, isEmpty);
+  });
+
+  test('does not count a leading continuation as a lyric slot', () {
+    final result = validate('3', '- 我');
+    expect(
+      result.warnings.single.message,
+      ScoreValidator.ignoredLeadingContinuationMessage,
+    );
+    expect(result.unmatchedLyrics, isEmpty);
+  });
+
+  test('warns about a leading continuation and remaining unmatched notes', () {
+    final result = validate('3 4', '- 我');
+    expect(
+      result.warnings.map((warning) => warning.message),
+      [
+        ScoreValidator.ignoredLeadingContinuationMessage,
+        ScoreValidator.missingLyricsMessage,
+      ],
+    );
+    expect(result.unmatchedLyrics, isEmpty);
+  });
+
+  test('warns for each leading continuation without counting them as slots',
+      () {
+    final result = validate('3 4', '- - 我');
+    expect(
+      result.warnings.map((warning) => warning.message),
+      contains(ScoreValidator.ignoredLeadingContinuationMessage),
+    );
+    expect(result.unmatchedLyrics, isEmpty);
+    expect(
+      result.warnings.map((warning) => warning.message),
+      contains(ScoreValidator.missingLyricsMessage),
+    );
+  });
+
+  test('keeps extra continuations in unmatched lyrics', () {
+    final result = validate('3 4', '我 爱 -');
+    expect(result.warnings.single.message, ScoreValidator.extraLyricsMessage);
+    expect(result.unmatchedLyrics, ['-']);
+  });
 }
