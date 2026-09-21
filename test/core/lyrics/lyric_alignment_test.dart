@@ -1,0 +1,406 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:jianpu_keyboard/core/lyrics/lyric_alignment.dart';
+import 'package:jianpu_keyboard/core/models/lyric_line.dart';
+import 'package:jianpu_keyboard/core/models/music_token.dart';
+import 'package:jianpu_keyboard/core/models/register.dart';
+import 'package:jianpu_keyboard/core/models/score.dart';
+import 'package:jianpu_keyboard/core/models/source_position.dart';
+import 'package:jianpu_keyboard/core/parser/lyric_tokenizer.dart';
+
+void main() {
+  const alignment = LyricAlignmentService();
+  const tokenizer = LyricTokenizer();
+
+  Note note(
+    int tokenIndex, {
+    int line = 1,
+    int degree = 3,
+    String? lyric,
+  }) {
+    return Note(
+      position: SourcePosition(
+        line: line,
+        column: 1,
+        tokenIndex: tokenIndex,
+        rawToken: '$degree',
+      ),
+      degree: degree,
+      register: Register.middle,
+      lyric: lyric,
+    );
+  }
+
+  SourcePosition position(int tokenIndex, String rawToken, {int line = 1}) {
+    return SourcePosition(
+      line: line,
+      column: 1,
+      tokenIndex: tokenIndex,
+      rawToken: rawToken,
+    );
+  }
+
+  List<LyricLine> tokenizeLyrics(String text) {
+    if (text.isEmpty) {
+      return const [];
+    }
+    final rawLines = text.split(RegExp(r'\r?\n'));
+    return [
+      for (var i = 0; i < rawLines.length; i++)
+        tokenizer.tokenizeLine(rawLines[i], i + 1),
+    ];
+  }
+
+  List<String?> noteLyrics(Score score) {
+    return [
+      for (final line in score.lines)
+        for (final token in line.tokens)
+          if (token is Note) token.lyric,
+    ];
+  }
+
+  test('aligns lyrics to consecutive notes', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1), note(2), note(3)],
+        ),
+      ],
+    );
+    final lyrics = [
+      const LyricLine(
+        lineNumber: 1,
+        tokens: [
+          LyricToken(
+            line: 1,
+            elementIndex: 1,
+            rawText: '我',
+            isMeasureBar: false,
+            syllable: '我',
+          ),
+          LyricToken(
+            line: 1,
+            elementIndex: 2,
+            rawText: '爱',
+            isMeasureBar: false,
+            syllable: '爱',
+          ),
+          LyricToken(
+            line: 1,
+            elementIndex: 3,
+            rawText: '你',
+            isMeasureBar: false,
+            syllable: '你',
+          ),
+        ],
+      ),
+    ];
+
+    final aligned = alignment
+        .align(score, lyrics)
+        .lines
+        .single
+        .tokens
+        .whereType<Note>()
+        .toList();
+    expect(aligned.map((item) => item.lyric), ['我', '爱', '你']);
+  });
+
+  test('preserves lyric alignment when hold symbols are present', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [
+            note(1),
+            Hold(position: position(2, '-')),
+            Hold(position: position(3, '-')),
+          ],
+        ),
+      ],
+    );
+    final lyrics = [
+      const LyricLine(
+        lineNumber: 1,
+        tokens: [
+          LyricToken(
+            line: 1,
+            elementIndex: 1,
+            rawText: '我',
+            isMeasureBar: false,
+            syllable: '我',
+          ),
+        ],
+      ),
+    ];
+
+    final tokens = alignment.align(score, lyrics).lines.single.tokens;
+    expect((tokens[0] as Note).lyric, '我');
+    expect(tokens[1], isA<Hold>());
+    expect(tokens[2], isA<Hold>());
+  });
+
+  test('does not consume lyrics for rests', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [
+            note(1),
+            Rest(position: position(2, '0')),
+            note(3),
+          ],
+        ),
+      ],
+    );
+    final lyrics = [
+      const LyricLine(
+        lineNumber: 1,
+        tokens: [
+          LyricToken(
+            line: 1,
+            elementIndex: 1,
+            rawText: '我',
+            isMeasureBar: false,
+            syllable: '我',
+          ),
+          LyricToken(
+            line: 1,
+            elementIndex: 2,
+            rawText: '爱',
+            isMeasureBar: false,
+            syllable: '爱',
+          ),
+        ],
+      ),
+    ];
+
+    final notes = alignment
+        .align(score, lyrics)
+        .lines
+        .single
+        .tokens
+        .whereType<Note>()
+        .toList();
+    expect(notes[0].lyric, '我');
+    expect(notes[1].lyric, '爱');
+  });
+
+  test('leaves remaining notes without lyrics when lyrics run out', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1), note(2), note(3)],
+        ),
+      ],
+    );
+    final lyrics = [
+      const LyricLine(
+        lineNumber: 1,
+        tokens: [
+          LyricToken(
+            line: 1,
+            elementIndex: 1,
+            rawText: '我',
+            isMeasureBar: false,
+            syllable: '我',
+          ),
+        ],
+      ),
+    ];
+
+    final notes = alignment
+        .align(score, lyrics)
+        .lines
+        .single
+        .tokens
+        .whereType<Note>()
+        .toList();
+    expect(notes[0].lyric, '我');
+    expect(notes[1].lyric, isNull);
+    expect(notes[2].lyric, isNull);
+  });
+
+  test('aligns lyrics across score and lyric lines in global order', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1, degree: 3), note(2, degree: 4), note(3, degree: 5)],
+        ),
+        ScoreLine(
+          lineNumber: 2,
+          tokens: [note(1, line: 2, degree: 6), note(2, line: 2, degree: 7)],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我 爱\n你 好 吗'));
+    expect(noteLyrics(aligned), ['我', '爱', '你', '好', '吗']);
+  });
+
+  test('continues lyrics across multiple score lines from one lyric line', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1, degree: 3), note(2, degree: 4)],
+        ),
+        ScoreLine(
+          lineNumber: 2,
+          tokens: [note(1, line: 2, degree: 5), note(2, line: 2, degree: 6)],
+        ),
+        ScoreLine(
+          lineNumber: 3,
+          tokens: [
+            note(1, line: 3, degree: 7),
+            note(2, line: 3, degree: 1),
+          ],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我爱你好吗世界'));
+    expect(noteLyrics(aligned), ['我', '爱', '你', '好', '吗', '世']);
+  });
+
+  test('does not consume lyrics for a hold among notes', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [
+            note(1, degree: 3),
+            Hold(position: position(2, '-')),
+            note(3, degree: 4),
+            note(4, degree: 5),
+          ],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我 爱 你'));
+    final tokens = aligned.lines.single.tokens;
+    expect((tokens[0] as Note).lyric, '我');
+    expect(tokens[1], isA<Hold>());
+    expect((tokens[2] as Note).lyric, '爱');
+    expect((tokens[3] as Note).lyric, '你');
+  });
+
+  test('does not consume lyrics for a rest among notes', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [
+            note(1, degree: 3),
+            Rest(position: position(2, '0')),
+            note(3, degree: 4),
+            note(4, degree: 5),
+          ],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我 爱 你'));
+    final tokens = aligned.lines.single.tokens;
+    expect((tokens[0] as Note).lyric, '我');
+    expect(tokens[1], isA<Rest>());
+    expect((tokens[2] as Note).lyric, '爱');
+    expect((tokens[3] as Note).lyric, '你');
+  });
+
+  test('does not consume lyrics for a measure bar', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [
+            note(1, degree: 3),
+            note(2, degree: 4),
+            MeasureBar(position: position(3, '|')),
+            note(4, degree: 5),
+            note(5, degree: 6),
+          ],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我 爱 你 好'));
+    expect(noteLyrics(aligned), ['我', '爱', '你', '好']);
+  });
+
+  test('does not reset lyric index when either side wraps to a new line', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1, degree: 3), note(2, degree: 4)],
+        ),
+        ScoreLine(
+          lineNumber: 2,
+          tokens: [note(1, line: 2, degree: 5), note(2, line: 2, degree: 6)],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我\n爱你好吗'));
+    expect(noteLyrics(aligned), ['我', '爱', '你', '好']);
+  });
+
+  test('leaves unmatched notes without lyrics when lyrics are insufficient',
+      () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [
+            note(1, degree: 3),
+            note(2, degree: 4),
+            note(3, degree: 5),
+            note(4, degree: 6),
+          ],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics('我 爱'));
+    expect(noteLyrics(aligned), ['我', '爱', null, null]);
+  });
+
+  test('leaves every note without lyrics when lyrics are empty', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1, degree: 3), note(2, degree: 4), note(3, degree: 5)],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(score, tokenizeLyrics(''));
+    expect(noteLyrics(aligned), [null, null, null]);
+  });
+
+  test('ignores blank lyric lines without resetting the global index', () {
+    final score = Score(
+      lines: [
+        ScoreLine(
+          lineNumber: 1,
+          tokens: [note(1, degree: 3), note(2, degree: 4)],
+        ),
+        ScoreLine(
+          lineNumber: 2,
+          tokens: [note(1, line: 2, degree: 5), note(2, line: 2, degree: 6)],
+        ),
+      ],
+    );
+
+    final aligned = alignment.align(
+      score,
+      tokenizeLyrics('我\n\n爱 你 好'),
+    );
+    expect(noteLyrics(aligned), ['我', '爱', '你', '好']);
+  });
+}
