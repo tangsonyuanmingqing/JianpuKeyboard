@@ -186,6 +186,7 @@ void main() {
 
     expect(find.text('A'), findsOneWidget);
     expect(find.text('键 A 被多个音符使用'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('keeps the mapping draft when the converter input is cleared',
@@ -201,6 +202,8 @@ void main() {
     await tester.tap(find.byKey(const Key('convert-button')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('clear-button')));
+    await tester.pump();
+    await tester.tap(find.text('清空').last);
     await tester.pump();
 
     expect(

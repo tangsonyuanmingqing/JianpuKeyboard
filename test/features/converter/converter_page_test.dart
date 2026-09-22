@@ -179,6 +179,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('clear-button')));
     await tester.pump();
+    expect(find.text('清空输入？'), findsOneWidget);
+    await tester.tap(find.text('清空').last);
+    await tester.pump();
 
     expect(find.byKey(const Key('score-input')), findsOneWidget);
     expect(
@@ -235,6 +238,62 @@ void main() {
     expect(
       find.text('缺少歌词的位置：第 1 行第 3 个元素'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('loads the basic example into the two input fields',
+      (tester) async {
+    await pumpPage(tester);
+
+    await tester.tap(find.byKey(const Key('load-example-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('填入两个输入框').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('score-input')))
+          .controller!
+          .text,
+      '1, 2, 3 0 4 | 5 6\' 7\' -',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('lyrics-input')))
+          .controller!
+          .text,
+      '微 风 来 | 到 身 边 -',
+    );
+  });
+
+  testWidgets('opens format help from the converter page', (tester) async {
+    await pumpPage(tester);
+
+    await tester.tap(find.byKey(const Key('format-help-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('格式说明'), findsOneWidget);
+    expect(find.text('支持语法'), findsOneWidget);
+    expect(find.text('默认键位'), findsOneWidget);
+  });
+
+  testWidgets('restores input after clearing when undo is selected',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.enterText(find.byKey(const Key('score-input')), '3 4 5');
+    await tester.tap(find.byKey(const Key('clear-button')));
+    await tester.pump();
+    await tester.tap(find.text('清空').last);
+    await tester.pump();
+    tester.widget<SnackBarAction>(find.byType(SnackBarAction)).onPressed();
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('score-input')))
+          .controller!
+          .text,
+      '3 4 5',
     );
   });
 }

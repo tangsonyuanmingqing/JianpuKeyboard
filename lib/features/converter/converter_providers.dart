@@ -8,51 +8,81 @@ import '../../core/mapping/mapping_draft.dart';
 import '../../core/models/conversion_result.dart';
 import '../../core/models/validation_message.dart';
 import '../../infrastructure/shared_preferences_mapping_storage.dart';
+import 'converter_input.dart';
+import 'converter_draft_persistence.dart';
 import 'mapping_persistence.dart';
 
-class ConverterInput {
-  final String scoreText;
-  final String lyricsText;
-
-  const ConverterInput({
-    this.scoreText = '',
-    this.lyricsText = '',
-  });
-
-  @override
-  bool operator ==(Object other) {
-    return other is ConverterInput &&
-        other.scoreText == scoreText &&
-        other.lyricsText == lyricsText;
-  }
-
-  @override
-  int get hashCode => Object.hash(scoreText, lyricsText);
-}
-
 class ConverterInputNotifier extends Notifier<ConverterInput> {
+  Timer? _saveTimer;
+
   @override
-  ConverterInput build() => const ConverterInput();
+  ConverterInput build() {
+    ref.onDispose(() => _saveTimer?.cancel());
+    return ref.read(initialConverterInputProvider);
+  }
 
   void setScoreText(String value) {
     if (state.scoreText == value) {
       return;
     }
-    state = ConverterInput(scoreText: value, lyricsText: state.lyricsText);
-    ref.read(conversionResultProvider.notifier).clear();
+    _replace(ConverterInput(scoreText: value, lyricsText: state.lyricsText));
   }
 
   void setLyricsText(String value) {
     if (state.lyricsText == value) {
       return;
     }
-    state = ConverterInput(scoreText: state.scoreText, lyricsText: value);
-    ref.read(conversionResultProvider.notifier).clear();
+    _replace(ConverterInput(scoreText: state.scoreText, lyricsText: value));
   }
 
-  void clear() {
+  ConverterInput clear() {
+    final previous = state;
+    _saveTimer?.cancel();
     state = const ConverterInput();
     ref.read(conversionResultProvider.notifier).clear();
+    unawaited(_clearSavedDraft());
+    return previous;
+  }
+
+  void restore(ConverterInput input) {
+    _replace(input, saveImmediately: true);
+  }
+
+  void replace(ConverterInput input) => _replace(input);
+
+  void _replace(ConverterInput input, {bool saveImmediately = false}) {
+    state = input;
+    ref.read(conversionResultProvider.notifier).clear();
+    _saveTimer?.cancel();
+    if (saveImmediately) {
+      unawaited(_saveDraft(input));
+      return;
+    }
+    _saveTimer = Timer(const Duration(seconds: 1), () {
+      unawaited(_saveDraft(input));
+    });
+  }
+
+  Future<void> _saveDraft(ConverterInput input) async {
+    try {
+      await ref.read(converterDraftPersistenceProvider).save(input);
+      ref.read(draftPersistenceMessageProvider.notifier).clear();
+    } on Object {
+      ref
+          .read(draftPersistenceMessageProvider.notifier)
+          .set('保存草稿失败，本次编辑可能无法在重启后恢复。');
+    }
+  }
+
+  Future<void> _clearSavedDraft() async {
+    try {
+      await ref.read(converterDraftPersistenceProvider).clear();
+      ref.read(draftPersistenceMessageProvider.notifier).clear();
+    } on Object {
+      ref
+          .read(draftPersistenceMessageProvider.notifier)
+          .set('清除草稿失败，重启后可能恢复原来的内容。');
+    }
   }
 }
 
@@ -149,6 +179,15 @@ class MappingPersistenceMessageNotifier extends Notifier<String?> {
   void clear() => state = null;
 }
 
+class DraftPersistenceMessageNotifier extends Notifier<String?> {
+  @override
+  String? build() => ref.read(initialDraftPersistenceMessageProvider);
+
+  void set(String message) => state = message;
+
+  void clear() => state = null;
+}
+
 class ConversionResultNotifier extends Notifier<ConversionResult?> {
   @override
   ConversionResult? build() => null;
@@ -203,6 +242,23 @@ class ConversionResultNotifier extends Notifier<ConversionResult?> {
 final converterInputProvider =
     NotifierProvider<ConverterInputNotifier, ConverterInput>(
   ConverterInputNotifier.new,
+);
+
+final converterDraftPersistenceProvider = Provider<ConverterDraftPersistence>(
+  (ref) => ConverterDraftPersistence(),
+);
+
+final initialConverterInputProvider = Provider<ConverterInput>(
+  (ref) => const ConverterInput(),
+);
+
+final initialDraftPersistenceMessageProvider = Provider<String?>((ref) => null);
+
+final initialDraftRestoredProvider = Provider<bool>((ref) => false);
+
+final draftPersistenceMessageProvider =
+    NotifierProvider<DraftPersistenceMessageNotifier, String?>(
+  DraftPersistenceMessageNotifier.new,
 );
 
 final mappingDraftProvider =

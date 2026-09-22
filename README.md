@@ -15,7 +15,7 @@
 
 ## 当前版本
 
-V1.1.0。
+V1.2.0。
 
 ## 当前功能
 
@@ -28,6 +28,10 @@ V1.1.0。
 - 文字输出
 - 点击「转换」后执行完整转换
 - 一键复制
+- 内置示例与格式说明
+- 自动保存并恢复输入草稿
+- 导出干净的 PNG 字母简谱图片
+- Windows x64 安装包与便携版发行
 
 编辑数字简谱、歌词或键位后，上一轮结果会被清空；点击「转换」才会显示按当前输入和键位生成的新结果。
 
@@ -127,3 +131,4 @@ flutter test -d windows integration_test/mapping_persistence_reset_restart_test.
 - [输入格式](docs/input-format.md)
 - [架构](docs/architecture.md)
 - [路线图](docs/roadmap.md)
+- [V1.2 交付说明](docs/v1.2-spec.md)
