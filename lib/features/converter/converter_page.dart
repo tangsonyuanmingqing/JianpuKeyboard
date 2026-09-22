@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'converter_providers.dart';
+import 'mapping_page.dart';
 
 class ConverterPage extends ConsumerStatefulWidget {
   const ConverterPage({super.key});
@@ -73,6 +74,20 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('数字简谱键盘字母转换器'),
+        actions: [
+          IconButton(
+            key: const Key('open-mapping-button'),
+            tooltip: '键盘映射',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => const MappingPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.keyboard),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
