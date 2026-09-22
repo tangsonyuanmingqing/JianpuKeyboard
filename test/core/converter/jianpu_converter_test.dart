@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jianpu_keyboard/core/converter/jianpu_converter.dart';
+import 'package:jianpu_keyboard/core/mapping/keyboard_mapping.dart';
 import 'package:jianpu_keyboard/core/models/music_token.dart';
 import 'package:jianpu_keyboard/core/models/register.dart';
 import 'package:jianpu_keyboard/core/validation/score_validator.dart';
@@ -430,5 +431,62 @@ void main() {
         .toList();
     expect(notes.map((note) => note.keyboardKey), ['D', 'F', 'G', 'H']);
     expect(notes.map((note) => note.lyric), ['我', '爱', '你', '好']);
+  });
+
+  test('custom mapping changes only keyboard letters', () {
+    const scoreText = '3 0 2 - | 5';
+    const lyricsText = '我 爱 你';
+    const defaults = KeyboardMapping();
+    final custom = JianpuConverter(
+      mapping: KeyboardMapping.fromLists(
+        low: defaults.low,
+        middle: [
+          for (var index = 0; index < defaults.middle.length; index++)
+            if (index == 2) 'E' else defaults.middle[index],
+        ],
+        high: defaults.high,
+      ),
+    );
+
+    final before = converter.convert(
+      scoreText: scoreText,
+      lyricsText: lyricsText,
+    );
+    final after = custom.convert(
+      scoreText: scoreText,
+      lyricsText: lyricsText,
+    );
+
+    final beforeTokens = before.score!.lines.single.tokens;
+    final afterTokens = after.score!.lines.single.tokens;
+    expect(afterTokens.length, beforeTokens.length);
+    expect(afterTokens.whereType<Rest>(), hasLength(1));
+    expect(afterTokens.whereType<Hold>(), hasLength(1));
+    expect(afterTokens.whereType<MeasureBar>(), hasLength(1));
+
+    final beforeNotes = beforeTokens.whereType<Note>().toList();
+    final afterNotes = afterTokens.whereType<Note>().toList();
+    expect(afterNotes.length, beforeNotes.length);
+    expect(
+      afterNotes.map((note) => note.degree),
+      beforeNotes.map((note) => note.degree),
+    );
+    expect(
+      afterNotes.map((note) => note.register),
+      beforeNotes.map((note) => note.register),
+    );
+    expect(
+      afterNotes.map((note) => note.lyric),
+      beforeNotes.map((note) => note.lyric),
+    );
+    expect(
+      afterNotes.map((note) => note.isLyricContinuation),
+      beforeNotes.map((note) => note.isLyricContinuation),
+    );
+    expect(beforeNotes.map((note) => note.keyboardKey), ['D', 'S', 'G']);
+    expect(afterNotes.map((note) => note.keyboardKey), ['E', 'S', 'G']);
+    expect(after.output.contains('0'), isTrue);
+    expect(after.output.contains('-'), isTrue);
+    expect(after.output.contains('|'), isTrue);
   });
 }
