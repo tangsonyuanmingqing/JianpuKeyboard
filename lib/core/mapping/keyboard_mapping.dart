@@ -2,20 +2,60 @@ import '../models/music_token.dart';
 import '../models/register.dart';
 import '../models/score.dart';
 
-/// Central keyboard mapping from Jianpu degree + register to a key letter.
+/// Immutable mapping from Jianpu degree + register to a single key letter.
+///
+/// [low], [middle] and [high] each hold seven letters.
+/// Index 0 is degree 1 and index 6 is degree 7.
+/// [KeyboardMapping.new] is the built-in default mapping.
+///
+/// The default lists are compile-time constants. [KeyboardMapping.fromLists]
+/// copies its arguments, so later edits to those lists do not change the
+/// mapping. Exposed lists reject element assignment.
 class KeyboardMapping {
-  static const _lowKeys = ['Z', 'X', 'C', 'V', 'B', 'N', 'M'];
-  static const _middleKeys = ['A', 'S', 'D', 'F', 'G', 'H', 'J'];
-  static const _highKeys = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U'];
+  static const _defaultLow = ['Z', 'X', 'C', 'V', 'B', 'N', 'M'];
+  static const _defaultMiddle = ['A', 'S', 'D', 'F', 'G', 'H', 'J'];
+  static const _defaultHigh = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U'];
 
-  const KeyboardMapping();
+  final List<String> low;
+  final List<String> middle;
+  final List<String> high;
+
+  const KeyboardMapping()
+      : this._(
+          low: _defaultLow,
+          middle: _defaultMiddle,
+          high: _defaultHigh,
+        );
+
+  const KeyboardMapping._({
+    required this.low,
+    required this.middle,
+    required this.high,
+  });
+
+  /// Copies [low], [middle] and [high] into lists that cannot be modified.
+  factory KeyboardMapping.fromLists({
+    required List<String> low,
+    required List<String> middle,
+    required List<String> high,
+  }) {
+    return KeyboardMapping._(
+      low: _frozenCopy(low),
+      middle: _frozenCopy(middle),
+      high: _frozenCopy(high),
+    );
+  }
+
+  static List<String> _frozenCopy(List<String> keys) {
+    return List<String>.unmodifiable(List<String>.of(keys));
+  }
 
   /// Returns the keyboard letter for [degree] (1-7) in [register].
   String keyFor(int degree, Register register) {
     final keys = switch (register) {
-      Register.low => _lowKeys,
-      Register.middle => _middleKeys,
-      Register.high => _highKeys,
+      Register.low => low,
+      Register.middle => middle,
+      Register.high => high,
     };
     return keys[degree - 1];
   }

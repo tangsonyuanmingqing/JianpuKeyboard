@@ -76,4 +76,71 @@ void main() {
       expect(mapping.keyFor(7, Register.low), 'M');
     });
   });
+
+  test('stores the default 21 keys on the mapping', () {
+    expect(mapping.low, ['Z', 'X', 'C', 'V', 'B', 'N', 'M']);
+    expect(mapping.middle, ['A', 'S', 'D', 'F', 'G', 'H', 'J']);
+    expect(mapping.high, ['Q', 'W', 'E', 'R', 'T', 'Y', 'U']);
+  });
+
+  test('reads letters from a custom 3 by 7 mapping', () {
+    final custom = KeyboardMapping.fromLists(
+      low: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+      middle: ['H', 'I', 'J', 'K', 'L', 'M', 'N'],
+      high: ['O', 'P', 'Q', 'R', 'S', 'T', 'U'],
+    );
+
+    expect(custom.keyFor(1, Register.low), 'A');
+    expect(custom.keyFor(7, Register.low), 'G');
+    expect(custom.keyFor(1, Register.middle), 'H');
+    expect(custom.keyFor(7, Register.middle), 'N');
+    expect(custom.keyFor(1, Register.high), 'O');
+    expect(custom.keyFor(7, Register.high), 'U');
+  });
+
+  test('keeps its letters when the source lists are later changed', () {
+    final low = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    final middle = ['H', 'I', 'J', 'K', 'L', 'M', 'N'];
+    final high = ['O', 'P', 'Q', 'R', 'S', 'T', 'U'];
+    final custom = KeyboardMapping.fromLists(
+      low: low,
+      middle: middle,
+      high: high,
+    );
+
+    low[0] = 'Z';
+    middle[0] = 'Z';
+    high[0] = 'Z';
+
+    expect(custom.low, ['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+    expect(custom.middle, ['H', 'I', 'J', 'K', 'L', 'M', 'N']);
+    expect(custom.high, ['O', 'P', 'Q', 'R', 'S', 'T', 'U']);
+    expect(custom.keyFor(1, Register.low), 'A');
+    expect(custom.keyFor(1, Register.middle), 'H');
+    expect(custom.keyFor(1, Register.high), 'O');
+  });
+
+  test('rejects assignment through the default key lists', () {
+    expect(() => mapping.low[0] = 'A', throwsUnsupportedError);
+    expect(() => mapping.middle[0] = 'Z', throwsUnsupportedError);
+    expect(() => mapping.high[0] = 'Z', throwsUnsupportedError);
+    expect(mapping.keyFor(1, Register.low), 'Z');
+    expect(mapping.keyFor(1, Register.middle), 'A');
+    expect(mapping.keyFor(1, Register.high), 'Q');
+  });
+
+  test('rejects assignment through a custom mapping key list', () {
+    final custom = KeyboardMapping.fromLists(
+      low: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+      middle: ['H', 'I', 'J', 'K', 'L', 'M', 'N'],
+      high: ['O', 'P', 'Q', 'R', 'S', 'T', 'U'],
+    );
+
+    expect(() => custom.low[0] = 'Z', throwsUnsupportedError);
+    expect(() => custom.middle[0] = 'Z', throwsUnsupportedError);
+    expect(() => custom.high[0] = 'Z', throwsUnsupportedError);
+    expect(custom.keyFor(1, Register.low), 'A');
+    expect(custom.keyFor(1, Register.middle), 'H');
+    expect(custom.keyFor(1, Register.high), 'O');
+  });
 }
