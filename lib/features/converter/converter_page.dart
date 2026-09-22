@@ -152,7 +152,13 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                 key: const Key('output-text'),
                 output.isEmpty ? '转换结果将显示在这里' : output,
                 style: const TextStyle(
-                  fontFamily: 'monospace',
+                  fontFamily: 'NSimSun',
+                  fontFamilyFallback: [
+                    'SimSun',
+                    'MS Gothic',
+                    'Consolas',
+                    'monospace',
+                  ],
                   fontSize: 16,
                   height: 1.5,
                 ),

@@ -114,7 +114,7 @@ void main() {
 我 爱 你
 ''';
     final result = converter.convert(scoreText: document);
-    expect(result.output, 'D F G\n我 爱 你');
+    expect(result.output, 'D  F  G\n我 爱 你');
     expect(result.errors, isEmpty);
   });
 
@@ -123,7 +123,7 @@ void main() {
       scoreText: '[谱]\n3 4 5',
       lyricsText: '我 爱 你',
     );
-    expect(result.output, 'D F G\n我 爱 你');
+    expect(result.output, 'D  F  G\n我 爱 你');
   });
 
   test('does not consume lyrics for holds', () {
@@ -135,7 +135,7 @@ void main() {
 我
 ''';
     final result = converter.convert(scoreText: document);
-    expect(result.output, 'D - -\n我');
+    expect(result.output, 'D  - -\n我');
   });
 
   test('does not consume lyrics for rests', () {
@@ -143,7 +143,7 @@ void main() {
       scoreText: '3 0 4',
       lyricsText: '我 爱',
     );
-    expect(result.output, 'D 0 F\n我 爱');
+    expect(result.output, 'D  0 F\n我   爱');
   });
 
   test('does not fail when lyrics are missing', () {
@@ -158,7 +158,7 @@ void main() {
       ScoreValidator.missingLyricsMessage,
     );
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D F G\n我');
+    expect(result.output, 'D  F G\n我');
   });
 
   test('warns but still converts when lyrics are extra', () {
@@ -173,7 +173,7 @@ void main() {
       ScoreValidator.extraLyricsMessage,
     );
     expect(result.unmatchedLyrics, ['你']);
-    expect(result.output, 'D F\n我 爱');
+    expect(result.output, 'D  F\n我 爱');
   });
 
   test('returns a locatable error for illegal tokens', () {
@@ -198,9 +198,9 @@ void main() {
     final result = converter.convert(scoreText: document);
     expect(
       result.output,
-      'D D D F G | D S S -\n'
+      'D  D  D  F  G  | D  S  S  -\n'
       '黑 黑 的 天 空 | 低 垂 亮\n'
-      'A A A S D | D J J -\n'
+      'A  A  A  S  D  | D  J J -\n'
       '亮 的 繁 星 相 | 随',
     );
   });
@@ -221,9 +221,9 @@ void main() {
     expect(result.unmatchedLyrics, isEmpty);
     expect(
       result.output,
-      'D D D F G | D S S -\n'
+      'D  D  D  F  G  | D  S  S -\n'
       '黑 黑 的 天 空 | 低 垂 -\n'
-      'A A A S D | D J J -\n'
+      'A  A  A  S  D  | D  J  J -\n'
       '亮 亮 的 繁 星 | 相 随 -',
     );
 
@@ -267,7 +267,7 @@ void main() {
     expect(result.errors, isEmpty);
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D S S -\n低 垂 -');
+    expect(result.output, 'D  S  S -\n低 垂 -');
 
     final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
     expect(notes.map((note) => note.lyric), ['低', '垂', '垂']);
@@ -284,7 +284,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D F\n我');
+    expect(result.output, 'D  F\n我');
     expect(
       result.warnings.map((warning) => warning.message),
       contains(ScoreValidator.ignoredLeadingContinuationMessage),
@@ -304,7 +304,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D F\n我');
+    expect(result.output, 'D  F\n我');
     expect(
       result.warnings.map((warning) => warning.message),
       contains(ScoreValidator.ignoredLeadingContinuationMessage),
@@ -320,7 +320,7 @@ void main() {
       scoreText: '3 4 5',
       lyricsText: '我爱你',
     );
-    expect(result.output, 'D F G\n我 爱 你');
+    expect(result.output, 'D  F  G\n我 爱 你');
   });
 
   test('does not warn when global lyric count matches notes', () {
@@ -330,7 +330,7 @@ void main() {
     );
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D F\n我 爱\nG H\n你 好');
+    expect(result.output, 'D  F\n我 爱\nG  H\n你 好');
   });
 
   test('warns and leaves unmatched notes empty when lyrics are short', () {
@@ -397,7 +397,7 @@ void main() {
     );
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D F G\n我 爱 你');
+    expect(result.output, 'D  F  G\n我 爱 你');
   });
 
   test('keeps extra lyrics out of rendered text', () {
@@ -407,7 +407,7 @@ void main() {
     );
     expect(result.warnings.single.message, ScoreValidator.extraLyricsMessage);
     expect(result.unmatchedLyrics, ['好', '吗']);
-    expect(result.output, 'D F G\n我 爱 你');
+    expect(result.output, 'D  F  G\n我 爱 你');
   });
 
   test('exposes aligned score, warnings and unmatched lyrics', () {
@@ -417,7 +417,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D F\n我 爱\nG H\n你 好');
+    expect(result.output, 'D  F\n我 爱\nG  H\n你 好');
     expect(
       result.warnings.single.message,
       ScoreValidator.extraLyricsMessage,

@@ -78,7 +78,7 @@ void main() {
 
     expect(
       tester.widget<SelectableText>(find.byKey(const Key('output-text'))).data,
-      'D F G\n我 爱 你',
+      'D  F  G\n我 爱 你',
     );
   });
 
@@ -110,6 +110,48 @@ void main() {
     expect(clipboardText, 'D F G');
   });
 
+  testWidgets('aligns lyric continuation under the continued note',
+      (tester) async {
+    await pumpPage(tester);
+
+    await tester.enterText(find.byKey(const Key('score-input')), '3 2 2 -');
+    await tester.enterText(find.byKey(const Key('lyrics-input')), '低 垂 -');
+    await tester.tap(find.byKey(const Key('convert-button')));
+    await tester.pump();
+
+    expect(
+      tester.widget<SelectableText>(find.byKey(const Key('output-text'))).data,
+      'D  S  S -\n低 垂 -',
+    );
+    expect(find.byKey(const Key('warning-text')), findsNothing);
+  });
+
+  testWidgets('copies aligned output without warnings', (tester) async {
+    String? clipboardText;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardText = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+
+    await pumpPage(tester);
+    await tester.enterText(find.byKey(const Key('score-input')), '3 4');
+    await tester.enterText(find.byKey(const Key('lyrics-input')), '我 爱 你');
+    await tester.tap(find.byKey(const Key('convert-button')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('copy-button')));
+    await tester.pump();
+
+    expect(clipboardText, 'D  F\n我 爱');
+    expect(find.byKey(const Key('warning-text')), findsOneWidget);
+    expect(clipboardText!.contains('歌词数量多于'), isFalse);
+    expect(find.text('未匹配歌词：你'), findsOneWidget);
+  });
+
   testWidgets('shows a message when copying without a result', (tester) async {
     await pumpPage(tester);
 
@@ -131,7 +173,7 @@ void main() {
     await tester.tap(find.byKey(const Key('convert-button')));
     await tester.pump();
 
-    expect(find.text('D F\n我 爱'), findsOneWidget);
+    expect(find.text('D  F\n我 爱'), findsOneWidget);
     expect(find.byKey(const Key('warning-text')), findsOneWidget);
     expect(find.byKey(const Key('unmatched-lyrics-text')), findsOneWidget);
 
@@ -151,7 +193,7 @@ void main() {
             .controller!
             .text,
         '');
-    expect(find.text('D F\n我 爱'), findsNothing);
+    expect(find.text('D  F\n我 爱'), findsNothing);
     expect(find.text('转换结果将显示在这里'), findsOneWidget);
     expect(find.byKey(const Key('warning-text')), findsNothing);
     expect(find.byKey(const Key('error-text')), findsNothing);

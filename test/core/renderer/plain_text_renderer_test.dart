@@ -4,6 +4,7 @@ import 'package:jianpu_keyboard/core/models/music_token.dart';
 import 'package:jianpu_keyboard/core/models/register.dart';
 import 'package:jianpu_keyboard/core/models/score.dart';
 import 'package:jianpu_keyboard/core/models/source_position.dart';
+import 'package:jianpu_keyboard/core/renderer/display_width.dart';
 import 'package:jianpu_keyboard/core/renderer/plain_text_renderer.dart';
 
 void main() {
@@ -31,103 +32,159 @@ void main() {
     );
   }
 
-  test('renders mapped notes as keyboard letters', () {
-    final score = mapping.apply(
-      Score(
-        lines: [
-          ScoreLine(
-            lineNumber: 1,
-            tokens: [
-              note(3, Register.middle, 1),
-              note(4, Register.middle, 2),
-              note(5, Register.middle, 3),
-            ],
-          ),
-        ],
+  SourcePosition pos(int tokenIndex, String rawToken) {
+    return SourcePosition(
+      line: 1,
+      column: 1,
+      tokenIndex: tokenIndex,
+      rawToken: rawToken,
+    );
+  }
+
+  String render(List<MusicToken> tokens) {
+    return renderer.render(
+      mapping.apply(
+        Score(
+          lines: [
+            ScoreLine(lineNumber: 1, tokens: tokens),
+          ],
+        ),
       ),
     );
-    expect(renderer.render(score), 'D F G');
+  }
+
+  int displayOffset(String row, int charIndex) {
+    return displayWidth(row.substring(0, charIndex));
+  }
+
+  test('renders mapped notes as keyboard letters', () {
+    expect(
+      render([
+        note(3, Register.middle, 1),
+        note(4, Register.middle, 2),
+        note(5, Register.middle, 3),
+      ]),
+      'D F G',
+    );
   });
 
-  test('renders lyrics under notes and preserves measure bars', () {
-    final score = mapping.apply(
-      Score(
-        lines: [
-          ScoreLine(
-            lineNumber: 1,
-            tokens: [
-              note(3, Register.middle, 1, lyric: '我'),
-              note(4, Register.middle, 2, lyric: '爱'),
-              const MeasureBar(
-                position: SourcePosition(
-                  line: 1,
-                  column: 1,
-                  tokenIndex: 3,
-                  rawToken: '|',
-                ),
-              ),
-              note(5, Register.middle, 4, lyric: '你'),
-            ],
-          ),
-        ],
-      ),
+  test('renders one syllable under each note with CJK column width', () {
+    expect(
+      render([
+        note(3, Register.middle, 1, lyric: '我'),
+        note(4, Register.middle, 2, lyric: '爱'),
+        note(5, Register.middle, 3, lyric: '你'),
+      ]),
+      'D  F  G\n我 爱 你',
     );
-    expect(renderer.render(score), 'D F | G\n我 爱 | 你');
+  });
+
+  test(
+      'renders lyrics under notes and preserves measure bars in the same column',
+      () {
+    final output = render([
+      note(3, Register.middle, 1, lyric: '我'),
+      note(4, Register.middle, 2, lyric: '爱'),
+      MeasureBar(position: pos(3, '|')),
+      note(5, Register.middle, 3, lyric: '你'),
+    ]);
+    expect(output, 'D  F  | G\n我 爱 | 你');
+
+    final lines = output.split('\n');
+    expect(
+      displayOffset(lines[0], lines[0].indexOf('|')),
+      displayOffset(lines[1], lines[1].indexOf('|')),
+    );
   });
 
   test('renders a continuation note as a hyphen', () {
-    final score = mapping.apply(
-      Score(
-        lines: [
-          ScoreLine(
-            lineNumber: 1,
-            tokens: [
-              note(3, Register.middle, 1, lyric: '低'),
-              note(2, Register.middle, 2, lyric: '垂'),
-              note(
-                2,
-                Register.middle,
-                3,
-                lyric: '垂',
-                isLyricContinuation: true,
-              ),
-              const Hold(
-                position: SourcePosition(
-                  line: 1,
-                  column: 1,
-                  tokenIndex: 4,
-                  rawToken: '-',
-                ),
-              ),
-            ],
-          ),
-        ],
+    final output = render([
+      note(3, Register.middle, 1, lyric: '低'),
+      note(2, Register.middle, 2, lyric: '垂'),
+      note(
+        2,
+        Register.middle,
+        3,
+        lyric: '垂',
+        isLyricContinuation: true,
       ),
-    );
+      Hold(position: pos(4, '-')),
+    ]);
 
-    expect(renderer.render(score), 'D S S -\n低 垂 -');
+    expect(output, 'D  S  S -\n低 垂 -');
+
+    final lines = output.split('\n');
+    final letter = lines[0];
+    final lyrics = lines[1];
+    final thirdS = letter.lastIndexOf('S');
+    final continuation = lyrics.indexOf('-');
+    final hold = letter.lastIndexOf('-');
+
+    expect(displayOffset(letter, thirdS), displayOffset(lyrics, continuation));
     expect(
-      score.lines.single.tokens.whereType<Note>().last.isLyricContinuation,
-      isTrue,
+      displayOffset(letter, hold),
+      isNot(displayOffset(lyrics, continuation)),
     );
   });
 
-  test('renders repeated syllables that are not continuations as themselves',
-      () {
-    final score = mapping.apply(
-      Score(
-        lines: [
-          ScoreLine(
-            lineNumber: 1,
-            tokens: [
-              note(3, Register.middle, 1, lyric: '黑'),
-              note(3, Register.middle, 2, lyric: '黑'),
-            ],
-          ),
-        ],
-      ),
+  test('does not infer continuation from repeated identical characters', () {
+    expect(
+      render([
+        note(3, Register.middle, 1, lyric: '黑'),
+        note(3, Register.middle, 2, lyric: '黑'),
+      ]),
+      'D  D\n黑 黑',
     );
+  });
 
-    expect(renderer.render(score), 'D D\n黑 黑');
+  test('keeps a rest column so later lyrics do not shift left', () {
+    final output = render([
+      note(3, Register.middle, 1, lyric: '我'),
+      Rest(position: pos(2, '0')),
+      note(4, Register.middle, 3, lyric: '爱'),
+      note(5, Register.middle, 4, lyric: '你'),
+    ]);
+    expect(output, 'D  0 F  G\n我   爱 你');
+
+    final lines = output.split('\n');
+    expect(displayOffset(lines[0], lines[0].indexOf('0')), 3);
+    expect(displayOffset(lines[1], lines[1].indexOf('爱')), 5);
+    expect(displayOffset(lines[0], lines[0].indexOf('F')), 5);
+  });
+
+  test('keeps a score hold column without a lyric', () {
+    expect(
+      render([
+        note(3, Register.middle, 1, lyric: '我'),
+        note(4, Register.middle, 2, lyric: '爱'),
+        note(5, Register.middle, 3, lyric: '你'),
+        Hold(position: pos(4, '-')),
+      ]),
+      'D  F  G  -\n我 爱 你',
+    );
+  });
+
+  test('keeps unmatched notes in their original columns', () {
+    expect(
+      render([
+        note(3, Register.middle, 1, lyric: '我'),
+        note(4, Register.middle, 2, lyric: '爱'),
+        note(5, Register.middle, 3),
+        note(6, Register.middle, 4),
+      ]),
+      'D  F  G H\n我 爱',
+    );
+  });
+
+  test('uses CJK display width rather than String.length', () {
+    final output = render([
+      note(3, Register.middle, 1, lyric: '我'),
+      note(4, Register.middle, 2, lyric: '爱'),
+    ]);
+    expect(output, 'D  F\n我 爱');
+    expect('我'.length, 1);
+    expect(displayWidth('我'), 2);
+    expect(displayWidth('D'), 1);
+    expect(output.split('\n').first.startsWith('D '), isTrue);
   });
 }
