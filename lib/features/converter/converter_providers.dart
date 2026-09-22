@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/converter/jianpu_converter.dart';
@@ -5,6 +7,8 @@ import '../../core/mapping/keyboard_mapping.dart';
 import '../../core/mapping/mapping_draft.dart';
 import '../../core/models/conversion_result.dart';
 import '../../core/models/validation_message.dart';
+import '../../infrastructure/shared_preferences_mapping_storage.dart';
+import 'mapping_persistence.dart';
 
 class ConverterInput {
   final String scoreText;
@@ -53,8 +57,14 @@ class ConverterInputNotifier extends Notifier<ConverterInput> {
 }
 
 class MappingDraftNotifier extends Notifier<MappingDraft> {
+  bool _disposed = false;
+  int _writeRevision = 0;
+
   @override
-  MappingDraft build() => MappingDraft.fromMapping(const KeyboardMapping());
+  MappingDraft build() {
+    ref.onDispose(() => _disposed = true);
+    return ref.read(initialMappingDraftProvider);
+  }
 
   /// Saves [draft] and drops the previous conversion.
   ///
@@ -65,6 +75,13 @@ class MappingDraftNotifier extends Notifier<MappingDraft> {
     }
     state = _copyDraft(draft);
     _clearConversion();
+    final validation = state.validate();
+    if (validation.isValid) {
+      _observeWrite(
+        ref.read(mappingPersistenceProvider).save(validation.mapping!),
+        '保存键盘映射失败，当前修改只在本次运行中有效。',
+      );
+    }
   }
 
   /// Restores the built-in mapping and drops the previous conversion.
@@ -74,6 +91,34 @@ class MappingDraftNotifier extends Notifier<MappingDraft> {
       state = defaults;
     }
     _clearConversion();
+    _observeWrite(
+      ref.read(mappingPersistenceProvider).clear(),
+      '恢复默认键位失败，重启后可能恢复原来的键位。',
+    );
+  }
+
+  void _observeWrite(Future<void> write, String failureMessage) {
+    final revision = ++_writeRevision;
+    unawaited(_finishWrite(write, revision, failureMessage));
+  }
+
+  Future<void> _finishWrite(
+    Future<void> write,
+    int revision,
+    String failureMessage,
+  ) async {
+    try {
+      await write;
+      if (!_disposed && revision == _writeRevision) {
+        ref.read(mappingPersistenceMessageProvider.notifier).clear();
+      }
+    } on Object {
+      if (!_disposed && revision == _writeRevision) {
+        ref
+            .read(mappingPersistenceMessageProvider.notifier)
+            .set(failureMessage);
+      }
+    }
   }
 
   void _clearConversion() {
@@ -93,6 +138,15 @@ class MappingDraftErrorNotifier extends Notifier<List<MappingDraftError>> {
   void clear() {
     state = const [];
   }
+}
+
+class MappingPersistenceMessageNotifier extends Notifier<String?> {
+  @override
+  String? build() => ref.read(initialMappingPersistenceMessageProvider);
+
+  void set(String message) => state = message;
+
+  void clear() => state = null;
 }
 
 class ConversionResultNotifier extends Notifier<ConversionResult?> {
@@ -152,6 +206,22 @@ final converterInputProvider =
 final mappingDraftProvider =
     NotifierProvider<MappingDraftNotifier, MappingDraft>(
   MappingDraftNotifier.new,
+);
+
+final mappingPersistenceProvider = Provider<MappingPersistence>((ref) {
+  return MappingPersistence(SharedPreferencesMappingStorage());
+});
+
+final initialMappingDraftProvider = Provider<MappingDraft>((ref) {
+  return MappingDraft.fromMapping(const KeyboardMapping());
+});
+
+final initialMappingPersistenceMessageProvider =
+    Provider<String?>((ref) => null);
+
+final mappingPersistenceMessageProvider =
+    NotifierProvider<MappingPersistenceMessageNotifier, String?>(
+  MappingPersistenceMessageNotifier.new,
 );
 
 final mappingDraftErrorsProvider =

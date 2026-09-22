@@ -57,6 +57,7 @@ class _MappingPageState extends ConsumerState<MappingPage> {
     });
 
     final draft = ref.watch(mappingDraftProvider);
+    final mappingMessage = ref.watch(mappingPersistenceMessageProvider);
     final validation = draft.validate();
     final theme = Theme.of(context);
 
@@ -73,6 +74,22 @@ class _MappingPageState extends ConsumerState<MappingPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (mappingMessage != null) ...[
+                    Text(
+                      mappingMessage,
+                      key: const Key('mapping-persistence-message'),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (validation.errors.isNotEmpty) ...[
+                    Text(
+                      '键位有误，当前修改不会保存。',
+                      key: const Key('mapping-unsaved-message'),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (validation.warnings.isNotEmpty) ...[
                     for (final warning in validation.warnings)
                       Padding(

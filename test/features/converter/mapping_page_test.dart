@@ -5,6 +5,9 @@ import 'package:jianpu_keyboard/core/models/register.dart';
 import 'package:jianpu_keyboard/features/converter/converter_page.dart';
 import 'package:jianpu_keyboard/features/converter/converter_providers.dart';
 import 'package:jianpu_keyboard/features/converter/mapping_page.dart';
+import 'package:jianpu_keyboard/features/converter/mapping_persistence.dart';
+
+import '../../support/in_memory_mapping_storage.dart';
 
 void main() {
   const defaultRows = {
@@ -14,7 +17,7 @@ void main() {
   };
 
   Future<ProviderContainer> pumpPage(WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = _testContainer();
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -104,6 +107,7 @@ void main() {
 
     await editField(tester, Register.middle, 3, '');
     expect(find.text('中音 3：请输入 A-Z 字母'), findsOneWidget);
+    expect(find.byKey(const Key('mapping-unsaved-message')), findsOneWidget);
     expect(container.read(mappingDraftProvider).middle?[2], '');
 
     await editField(tester, Register.middle, 3, '1');
@@ -235,7 +239,7 @@ Future<void> _pumpMappingPageAt(WidgetTester tester, Size size) async {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  final container = ProviderContainer();
+  final container = _testContainer();
   addTearDown(container.dispose);
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -245,4 +249,14 @@ Future<void> _pumpMappingPageAt(WidgetTester tester, Size size) async {
   );
   await tester.tap(find.byKey(const Key('open-mapping-button')));
   await tester.pumpAndSettle();
+}
+
+ProviderContainer _testContainer() {
+  return ProviderContainer(
+    overrides: [
+      mappingPersistenceProvider.overrideWithValue(
+        MappingPersistence(InMemoryMappingStorage()),
+      ),
+    ],
+  );
 }

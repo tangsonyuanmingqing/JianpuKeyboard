@@ -4,6 +4,9 @@ import 'package:jianpu_keyboard/core/mapping/keyboard_mapping.dart';
 import 'package:jianpu_keyboard/core/mapping/mapping_draft.dart';
 import 'package:jianpu_keyboard/core/models/register.dart';
 import 'package:jianpu_keyboard/features/converter/converter_providers.dart';
+import 'package:jianpu_keyboard/features/converter/mapping_persistence.dart';
+
+import '../../support/in_memory_mapping_storage.dart';
 
 void main() {
   const defaults = KeyboardMapping();
@@ -24,7 +27,13 @@ void main() {
   }
 
   ProviderContainer container() {
-    final result = ProviderContainer();
+    final result = ProviderContainer(
+      overrides: [
+        mappingPersistenceProvider.overrideWithValue(
+          MappingPersistence(InMemoryMappingStorage()),
+        ),
+      ],
+    );
     addTearDown(result.dispose);
     return result;
   }

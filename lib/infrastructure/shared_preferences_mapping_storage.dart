@@ -6,12 +6,16 @@ import 'mapping_storage.dart';
 ///
 /// JSON decoding and selection of a default mapping belong to the caller.
 class SharedPreferencesMappingStorage implements MappingStorage {
-  static const _key = 'jianpu_keyboard.keyboard_mapping';
+  static const _defaultKey = 'jianpu_keyboard.keyboard_mapping';
 
+  final String _key;
   SharedPreferencesAsync? _preferences;
 
-  SharedPreferencesMappingStorage({SharedPreferencesAsync? preferences})
-      : _preferences = preferences;
+  SharedPreferencesMappingStorage({
+    SharedPreferencesAsync? preferences,
+    String key = _defaultKey,
+  })  : _key = key,
+        _preferences = preferences;
 
   SharedPreferencesAsync get _store =>
       _preferences ??= SharedPreferencesAsync();

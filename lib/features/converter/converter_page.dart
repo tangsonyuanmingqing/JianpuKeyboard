@@ -69,6 +69,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
   @override
   Widget build(BuildContext context) {
     final result = ref.watch(conversionResultProvider);
+    final mappingMessage = ref.watch(mappingPersistenceMessageProvider);
     final output = result?.output ?? '';
 
     return Scaffold(
@@ -93,6 +94,14 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (mappingMessage != null) ...[
+              Text(
+                mappingMessage,
+                key: const Key('mapping-persistence-message'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               key: const Key('score-input'),
               controller: _scoreController,

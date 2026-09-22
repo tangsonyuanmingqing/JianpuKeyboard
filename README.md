@@ -15,7 +15,7 @@
 
 ## 当前版本
 
-V1
+V1.0.1；V1.1 开发中。
 
 ## 当前功能
 
@@ -28,6 +28,8 @@ V1
 - 文字输出
 - 点击「转换」后执行完整转换
 - 一键复制
+
+V1.1 开发中的自定义键位功能：键位页面可编辑低音、中音、高音各 7 个字母。合法键位会保存在本机并在重启后恢复；非法草稿不会覆盖上一次保存的配置。修改键位仍需点击「转换」才会生成新结果。
 
 V1 不包含：图片识谱、OCR/OMR、MIDI、自动按键、云端、登录、数据库。
 
@@ -108,6 +110,14 @@ flutter test
 ```
 
 核心测试不依赖具体操作系统 API。
+
+Windows 本地持久化验收按顺序执行以下三个独立应用进程。测试使用专用存储键，不改动日常使用的键位配置：
+
+```bash
+flutter test -d windows integration_test/mapping_persistence_write_test.dart
+flutter test -d windows integration_test/mapping_persistence_restart_test.dart
+flutter test -d windows integration_test/mapping_persistence_reset_restart_test.dart
+```
 
 ## 文档
 

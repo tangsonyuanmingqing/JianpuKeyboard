@@ -47,6 +47,20 @@ void main() {
     expect(preferences.values, {'another.setting': 'untouched'});
   });
 
+  test('a custom key stays separate from the default mapping', () async {
+    final isolated = SharedPreferencesMappingStorage(
+      preferences: preferences,
+      key: 'jianpu_keyboard.integration_test',
+    );
+
+    await storage.save('default');
+    await isolated.save('test');
+    await isolated.clear();
+
+    expect(await storage.load(), 'default');
+    expect(await isolated.load(), isNull);
+  });
+
   test('wraps read failure and does not treat it as missing data', () async {
     final failure = StateError('read failed');
     preferences = _PreferencesFake(readFailure: failure);
