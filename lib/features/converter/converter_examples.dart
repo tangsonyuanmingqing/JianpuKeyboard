@@ -32,4 +32,11 @@ const converterExamples = [
       lyricsText: '晨 光 落 在 | 窗 前 -\n轻 声 唱 起 | 新 的 歌 -',
     ),
   ),
+  ConverterExample(
+    title: '交替谱词示例',
+    description: '重复 [谱] / [词]，用 // 分句、; 分行。',
+    input: ConverterInput(
+      scoreText: '[谱] 3 4 5; 5 4 3 // 1 2\n[词] 我爱你;你爱我 // 新歌\n[谱] 6 7\n[词] 好啊',
+    ),
+  ),
 ];

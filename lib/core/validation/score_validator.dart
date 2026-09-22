@@ -1,4 +1,5 @@
 import '../models/lyric_line.dart';
+import '../models/input_segment.dart';
 import '../models/music_token.dart';
 import '../models/score.dart';
 import '../models/source_position.dart';
@@ -32,6 +33,10 @@ class ScoreValidator {
     required Score score,
     required List<LyricLine> lyricLines,
   }) {
+    if (score.lines.any((line) => line.segment != null) ||
+        lyricLines.any((line) => line.segment != null)) {
+      return _validateStructured(score, lyricLines);
+    }
     final noteCount = _consumableNoteCount(score);
     final walked = _walkLyricSlots(lyricLines);
     final slots = walked.slots;
@@ -74,6 +79,85 @@ class ScoreValidator {
       ],
       unmatchedLyrics: [for (final slot in unmatchedSlots) slot.text],
       unmatchedLyricTokens: [for (final slot in unmatchedSlots) slot.token],
+    );
+  }
+
+  ScoreValidation _validateStructured(
+    Score score,
+    List<LyricLine> lyricLines,
+  ) {
+    final lyricsBySegment = <InputSegment, List<LyricLine>>{};
+    for (final line in lyricLines) {
+      if (line.segment case final segment?) {
+        lyricsBySegment.putIfAbsent(segment, () => []).add(line);
+      }
+    }
+    final groupsWithLyrics = {
+      for (final segment in lyricsBySegment.keys) segment.group,
+    };
+
+    final warnings = <ValidationMessage>[];
+    final unmatchedLyrics = <String>[];
+    final unmatchedTokens = <LyricToken>[];
+    final missingPositions = <SourcePosition>[];
+    final seenSegments = <InputSegment>{};
+
+    for (final scoreLine in score.lines) {
+      final segment = scoreLine.segment;
+      if (segment == null) continue;
+      seenSegments.add(segment);
+      if (!lyricsBySegment.containsKey(segment) &&
+          groupsWithLyrics.contains(segment.group)) {
+        warnings.add(
+          ValidationMessage(
+            line: 0,
+            message: '${segment.label}：$missingLyricsMessage',
+          ),
+        );
+        missingPositions.addAll(_notes(Score(lines: [scoreLine]))
+            .map((note) => note.position));
+        continue;
+      }
+      final validation = validate(
+        score: Score(lines: [
+          ScoreLine(lineNumber: scoreLine.lineNumber, tokens: scoreLine.tokens),
+        ]),
+        lyricLines: [
+          for (final line in lyricsBySegment[segment] ?? const <LyricLine>[])
+            LyricLine(lineNumber: line.lineNumber, tokens: line.tokens),
+        ],
+      );
+      final label = segment.label;
+      warnings.addAll([
+        for (final warning in validation.warnings)
+          ValidationMessage(
+              line: warning.line, message: '$label：${warning.message}'),
+      ]);
+      unmatchedLyrics.addAll(validation.unmatchedLyrics);
+      unmatchedTokens.addAll(validation.unmatchedLyricTokens);
+      missingPositions.addAll(validation.missingLyricNotePositions);
+    }
+
+    for (final entry in lyricsBySegment.entries) {
+      if (seenSegments.contains(entry.key)) continue;
+      final walked = _walkLyricSlots(entry.value);
+      if (walked.slots.isEmpty) continue;
+      final segment = entry.key;
+      warnings.add(
+        ValidationMessage(
+          line: 0,
+          message: '${segment.label}：$extraLyricsMessage',
+        ),
+      );
+      unmatchedLyrics.addAll([for (final slot in walked.slots) slot.text]);
+      unmatchedTokens.addAll([for (final slot in walked.slots) slot.token]);
+    }
+
+    return ScoreValidation(
+      warnings: warnings,
+      unmatchedLyrics: unmatchedLyrics,
+      unmatchedLyricTokens: unmatchedTokens,
+      missingLyricNotePositions: missingPositions,
     );
   }
 

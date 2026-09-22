@@ -90,6 +90,7 @@ class KeyboardMapping {
         for (final line in score.lines)
           ScoreLine(
             lineNumber: line.lineNumber,
+            segment: line.segment,
             tokens: [
               for (final token in line.tokens)
                 if (token is Note)

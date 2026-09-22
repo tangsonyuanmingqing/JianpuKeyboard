@@ -18,7 +18,7 @@ class FormatHelpPage extends StatelessWidget {
           Text('支持语法', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           const Text(
-              '中音：1 2 3 4 5 6 7\n高音：1\' 2\' 3\'\n低音：1, 2, 3,\n0 为休止，- 为延音，| 为小节线。'),
+              '中音：1 2 3 4 5 6 7\n高音：1\' 2\' 3\'\n低音：1, 2, 3,\n0 为休止，- 为延音，| 为小节线。\n\n可重复写 [谱]、[词] 区块；// 表示一句结束，; 表示一行结束。按 Enter 会自动补上 ;。'),
           const SizedBox(height: 20),
           Text('默认键位', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
@@ -27,7 +27,8 @@ class FormatHelpPage extends StatelessWidget {
           const SizedBox(height: 20),
           Text('歌词对齐', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
-          const Text('普通歌词按顺序对应音符。歌词 - 表示延续上一个歌词；谱面中的 0、- 和 | 不消耗歌词。'),
+          const Text(
+              '普通歌词按顺序对应音符。歌词 - 表示延续上一个歌词；谱面中的 0、- 和 | 不消耗歌词。每个 [谱] 与其后的 [词] 就近配对；谱词都可用 // 分句、用 ; 分行。'),
           const SizedBox(height: 20),
           Text('示例', style: Theme.of(context).textTheme.titleLarge),
           for (final example in converterExamples)

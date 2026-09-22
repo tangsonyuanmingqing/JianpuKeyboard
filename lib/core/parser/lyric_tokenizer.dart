@@ -1,4 +1,5 @@
 import '../models/lyric_line.dart';
+import '../models/input_segment.dart';
 import '../syntax/jianpu_syntax.dart';
 import 'jianpu_tokenizer.dart';
 
@@ -44,7 +45,11 @@ class LyricTokenizer {
     JianpuTokenizer tokenizer = const JianpuTokenizer(),
   }) : _tokenizer = tokenizer;
 
-  LyricLine tokenizeLine(String line, int lineNumber) {
+  LyricLine tokenizeLine(
+    String line,
+    int lineNumber, {
+    InputSegment? segment,
+  }) {
     final tokens = <LyricToken>[];
     var elementIndex = 0;
     for (final raw in _tokenizer.tokenizeLine(line, lineNumber)) {
@@ -97,7 +102,11 @@ class LyricTokenizer {
         );
       }
     }
-    return LyricLine(lineNumber: lineNumber, tokens: tokens);
+    return LyricLine(
+      lineNumber: lineNumber,
+      tokens: tokens,
+      segment: segment,
+    );
   }
 
   List<({String text, bool isContinuation})> _splitLyricPieces(String text) {

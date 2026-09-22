@@ -1,3 +1,5 @@
+import 'input_segment.dart';
+
 /// One lyrics token: a syllable, a structural measure bar, or a continuation.
 class LyricToken {
   final int line;
@@ -27,10 +29,12 @@ class LyricToken {
 class LyricLine {
   final int lineNumber;
   final List<LyricToken> tokens;
+  final InputSegment? segment;
 
   const LyricLine({
     required this.lineNumber,
     required this.tokens,
+    this.segment,
   });
 
   Iterable<LyricToken> get syllables =>

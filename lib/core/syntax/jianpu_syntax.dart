@@ -5,6 +5,8 @@ class JianpuSyntax {
   static const measureBar = '|';
   static const holdSymbol = '-';
   static const restSymbol = '0';
+  static const sentenceSeparator = '//';
+  static const rowSeparator = ';';
 
   const JianpuSyntax._();
 }

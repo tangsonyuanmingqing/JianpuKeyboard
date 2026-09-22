@@ -34,7 +34,7 @@ class JianpuConverter {
     switch (parsed) {
       case ParseFailure(:final errors):
         return ConversionResult(output: '', errors: errors);
-      case ParseSuccess(:final score, :final lyricLines):
+      case ParseSuccess(:final score, :final lyricLines, :final inputWarnings):
         final aligned = lyricAlignment.align(score, lyricLines);
         final validation = validator.validate(
           score: aligned,
@@ -43,7 +43,7 @@ class JianpuConverter {
         final mapped = mapping.apply(aligned);
         return ConversionResult(
           output: renderer.render(mapped),
-          warnings: validation.warnings,
+          warnings: [...inputWarnings, ...validation.warnings],
           unmatchedLyrics: validation.unmatchedLyrics,
           unmatchedLyricTokens: validation.unmatchedLyricTokens,
           missingLyricNotePositions: validation.missingLyricNotePositions,

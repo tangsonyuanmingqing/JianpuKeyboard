@@ -14,6 +14,7 @@ import 'converter_providers.dart';
 import 'format_help_page.dart';
 import 'mapping_page.dart';
 import 'png_export_service.dart';
+import 'semicolon_line_break_formatter.dart';
 
 class ConverterPage extends ConsumerStatefulWidget {
   const ConverterPage({super.key});
@@ -267,6 +268,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                 TextField(
                   key: const Key('score-input'),
                   controller: _scoreController,
+                  inputFormatters: const [SemicolonLineBreakFormatter()],
                   minLines: 6,
                   maxLines: 12,
                   keyboardType: TextInputType.multiline,
@@ -286,6 +288,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                 TextField(
                   key: const Key('lyrics-input'),
                   controller: _lyricsController,
+                  inputFormatters: const [SemicolonLineBreakFormatter()],
                   minLines: 3,
                   maxLines: 8,
                   keyboardType: TextInputType.multiline,
