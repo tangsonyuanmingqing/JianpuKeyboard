@@ -483,7 +483,6 @@ class _SegmentSplitter {
       sawSeparator = true;
       if (isSentence) {
         _sentence += 1;
-        _row = 1;
       } else {
         _row += 1;
       }

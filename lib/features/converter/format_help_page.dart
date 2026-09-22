@@ -18,7 +18,7 @@ class FormatHelpPage extends StatelessWidget {
           Text('支持语法', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           const Text(
-              '中音：1 2 3 4 5 6 7\n高音：1\' 2\' 3\'\n低音：1, 2, 3,\n0 为休止，- 为延音，| 为小节线。\n\n可重复写 [谱]、[词] 区块；// 表示一句结束，; 表示一行结束。按 Enter 会自动补上 ;。'),
+              '中音：1 2 3 4 5 6 7\n高音：1\' 2\' 3\'\n低音：1, 2, 3,\n0 为休止，- 为延音，| 为小节线。\n\n可重复写 [谱]、[词] 区块；// 表示一句结束，转换后会显示但不换行；; 表示一行结束。按 Enter 会自动补上 ;。'),
           const SizedBox(height: 20),
           Text('默认键位', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),

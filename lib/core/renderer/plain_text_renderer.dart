@@ -45,6 +45,11 @@ class RenderCell {
     };
   }
 
+  const RenderCell.sentenceSeparator()
+      : letterText = JianpuSyntax.sentenceSeparator,
+        lyricText = JianpuSyntax.sentenceSeparator,
+        isMeasureBar = false;
+
   int get columnWidth => max(
         displayWidth(letterText),
         displayWidth(lyricText),
@@ -56,6 +61,9 @@ class PlainTextRenderer {
   const PlainTextRenderer();
 
   String render(Score score) {
+    if (score.lines.any((line) => line.segment != null)) {
+      return _renderStructured(score);
+    }
     final blocks = <String>[];
     for (final line in score.lines) {
       if (line.tokens.isEmpty) {
@@ -79,6 +87,57 @@ class PlainTextRenderer {
       } else {
         blocks.add([for (final cell in cells) cell.letterText].join(' '));
       }
+    }
+    return blocks.join('\n');
+  }
+
+  String _renderStructured(Score score) {
+    final blocks = <String>[];
+    var start = 0;
+    while (start < score.lines.length) {
+      final first = score.lines[start];
+      final segment = first.segment;
+      if (segment == null) {
+        blocks.add(render(Score(lines: [first])));
+        start += 1;
+        continue;
+      }
+
+      var end = start + 1;
+      while (end < score.lines.length) {
+        final candidate = score.lines[end].segment;
+        if (candidate == null ||
+            candidate.group != segment.group ||
+            candidate.row != segment.row) {
+          break;
+        }
+        end += 1;
+      }
+
+      final rowLines = score.lines.sublist(start, end);
+      final cells = <RenderCell>[];
+      for (var index = 0; index < rowLines.length; index++) {
+        if (index > 0) cells.add(const RenderCell.sentenceSeparator());
+        cells.addAll([
+          for (final token in rowLines[index].tokens)
+            RenderCell.fromToken(token),
+        ]);
+      }
+      final widths = [for (final cell in cells) cell.columnWidth];
+      final hasLyrics = rowLines.any(
+        (line) => line.tokens.any(_noteHasLyric),
+      );
+      blocks.add(_renderRow(
+        [for (final cell in cells) cell.letterText],
+        widths,
+      ));
+      if (hasLyrics) {
+        blocks.add(_renderRow(
+          [for (final cell in cells) cell.lyricText],
+          widths,
+        ));
+      }
+      start = end;
     }
     return blocks.join('\n');
   }

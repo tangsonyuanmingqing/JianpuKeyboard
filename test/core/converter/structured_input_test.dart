@@ -18,7 +18,7 @@ void main() {
     expect(result.errors, isEmpty);
     expect(
       result.output,
-      'D  F  G\n我 爱 你\nG  F  D\n你 爱 我\nA  S\n新 歌\nH  J\n好 啊',
+      'D  F  G\n我 爱 你\nG  F  D  // A  S\n你 爱 我 // 新 歌\nH  J\n好 啊',
     );
   });
 
@@ -28,7 +28,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D  F\n我\nG\n你');
+    expect(result.output, 'D  F // G\n我   // 你');
     expect(
       result.warnings.single.message,
       '第 1 组，第 1 句，第 1 行：歌词少于可对应音符数量，部分音符没有歌词。',
