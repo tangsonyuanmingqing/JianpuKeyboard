@@ -5,8 +5,9 @@
 /// caller decodes the stored string and handles that failure separately.
 class MappingStorageException implements Exception {
   final String message;
+  final Object? cause;
 
-  const MappingStorageException(this.message);
+  const MappingStorageException(this.message, {this.cause});
 
   @override
   String toString() => 'MappingStorageException: $message';
