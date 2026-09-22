@@ -1,6 +1,7 @@
 import '../models/music_token.dart';
 import '../models/register.dart';
 import '../models/score.dart';
+import 'keyboard_mapping_json.dart';
 
 /// Immutable mapping from Jianpu degree + register to a single key letter.
 ///
@@ -12,6 +13,8 @@ import '../models/score.dart';
 /// copies its arguments, so later edits to those lists do not change the
 /// mapping. Exposed lists reject element assignment.
 class KeyboardMapping {
+  static const jsonVersion = 1;
+
   static const _defaultLow = ['Z', 'X', 'C', 'V', 'B', 'N', 'M'];
   static const _defaultMiddle = ['A', 'S', 'D', 'F', 'G', 'H', 'J'];
   static const _defaultHigh = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U'];
@@ -48,6 +51,26 @@ class KeyboardMapping {
 
   static List<String> _frozenCopy(List<String> keys) {
     return List<String>.unmodifiable(List<String>.of(keys));
+  }
+
+  /// Serializes this mapping as a version 1 JSON object.
+  ///
+  /// The returned lists are copies of the stored letters.
+  Map<String, Object?> toJson() {
+    return {
+      'version': jsonVersion,
+      'low': List<String>.of(low),
+      'middle': List<String>.of(middle),
+      'high': List<String>.of(high),
+    };
+  }
+
+  /// Decodes a version 1 mapping document.
+  ///
+  /// Structural problems and illegal keys leave [KeyboardMappingJsonResult.mapping]
+  /// null. Duplicate keys stay valid and are returned as warnings.
+  static KeyboardMappingJsonResult fromJson(Object? json) {
+    return decodeKeyboardMapping(json);
   }
 
   /// Returns the keyboard letter for [degree] (1-7) in [register].
