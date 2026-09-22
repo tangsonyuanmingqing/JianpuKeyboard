@@ -49,6 +49,16 @@ void main() {
     expect(result.unmatchedLyrics, isEmpty);
   });
 
+  test('identifies every note that has no matching lyric', () {
+    final result = validate('3 0 4\n5', '我');
+
+    expect(
+      result.missingLyricNotePositions
+          .map((position) => (position.line, position.tokenIndex)),
+      [(1, 3), (2, 1)],
+    );
+  });
+
   test('warns and keeps unmatched lyrics when lyrics are extra', () {
     final result = validate('3 4 5', '我 爱 你 好 吗');
     expect(result.warnings, hasLength(1));
@@ -57,6 +67,14 @@ void main() {
       ScoreValidator.extraLyricsMessage,
     );
     expect(result.unmatchedLyrics, ['好', '吗']);
+  });
+
+  test('retains locations for unmatched lyrics', () {
+    final result = validate('3', '我 好');
+
+    expect(result.unmatchedLyrics, ['好']);
+    expect(result.unmatchedLyricTokens.single.line, 1);
+    expect(result.unmatchedLyricTokens.single.elementIndex, 2);
   });
 
   test('counts notes and lyrics globally across lines', () {

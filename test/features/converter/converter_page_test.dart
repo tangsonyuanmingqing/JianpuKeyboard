@@ -149,7 +149,7 @@ void main() {
     expect(clipboardText, 'D  F\n我 爱');
     expect(find.byKey(const Key('warning-text')), findsOneWidget);
     expect(clipboardText!.contains('歌词数量多于'), isFalse);
-    expect(find.text('未匹配歌词：你'), findsOneWidget);
+    expect(find.text('未匹配歌词：你（第 1 行第 3 项）'), findsOneWidget);
   });
 
   testWidgets('shows a message when copying without a result', (tester) async {
@@ -220,6 +220,21 @@ void main() {
     await tester.pump();
 
     expect(find.text('第 1 行第 1 个元素无法识别：1#'), findsOneWidget);
+    expect(find.text('位置：第 1 行，第 1 列'), findsOneWidget);
     expect(find.text('D F G'), findsNothing);
+  });
+
+  testWidgets('shows where lyrics are missing', (tester) async {
+    await pumpPage(tester);
+
+    await tester.enterText(find.byKey(const Key('score-input')), '3 0 4');
+    await tester.enterText(find.byKey(const Key('lyrics-input')), '我');
+    await tester.tap(find.byKey(const Key('convert-button')));
+    await tester.pump();
+
+    expect(
+      find.text('缺少歌词的位置：第 1 行第 3 个元素'),
+      findsOneWidget,
+    );
   });
 }

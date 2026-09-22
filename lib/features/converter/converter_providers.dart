@@ -189,6 +189,8 @@ class ConversionResultNotifier extends Notifier<ConversionResult?> {
           ValidationMessage(line: 0, message: warning.message),
       ],
       unmatchedLyrics: converted.unmatchedLyrics,
+      unmatchedLyricTokens: converted.unmatchedLyricTokens,
+      missingLyricNotePositions: converted.missingLyricNotePositions,
       score: converted.score,
     );
   }

@@ -19,7 +19,11 @@ class JianpuTokenizer {
 
   const JianpuTokenizer();
 
-  List<RawToken> tokenizeLine(String line, int lineNumber) {
+  List<RawToken> tokenizeLine(
+    String line,
+    int lineNumber, {
+    int columnOffset = 0,
+  }) {
     final tokens = <RawToken>[];
     var tokenIndex = 0;
     for (final match in _tokenPattern.allMatches(line)) {
@@ -28,7 +32,7 @@ class JianpuTokenizer {
         RawToken(
           text: match.group(0)!,
           line: lineNumber,
-          column: match.start + 1,
+          column: columnOffset + match.start + 1,
           tokenIndex: tokenIndex,
         ),
       );

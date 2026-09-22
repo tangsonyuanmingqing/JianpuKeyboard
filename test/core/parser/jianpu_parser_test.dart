@@ -93,6 +93,16 @@ void main() {
     expect(error.message, '第 1 行第 3 个元素无法识别：1#');
   });
 
+  test('retains the source column after an inline score header', () {
+    final result = parser.parse(scoreText: '[谱]   3 1#');
+    final error = (result as ParseFailure).errors.single;
+
+    expect(error.line, 1);
+    expect(error.tokenIndex, 2);
+    expect(error.column, 9);
+    expect(error.token, '1#');
+  });
+
   test('records character columns on successfully parsed notes', () {
     final result = parser.parse(scoreText: '3 4 5');
     final tokens = (result as ParseSuccess).score.lines.single.tokens;

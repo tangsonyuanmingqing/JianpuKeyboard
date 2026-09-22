@@ -45,6 +45,8 @@ class JianpuConverter {
           output: renderer.render(mapped),
           warnings: validation.warnings,
           unmatchedLyrics: validation.unmatchedLyrics,
+          unmatchedLyricTokens: validation.unmatchedLyricTokens,
+          missingLyricNotePositions: validation.missingLyricNotePositions,
           score: mapped,
         );
     }

@@ -181,7 +181,7 @@ V1 使用全局顺序对齐：
 - `2''`
 - `abc`
 
-错误必须包含行号、真实字符列号 `column`、token 顺序 `tokenIndex`、原始 token 和原因。
+错误必须包含行号、真实字符列号 `column`、token 顺序 `tokenIndex`、原始 token 和原因。界面会同时显示元素顺序与真实列号。
 
 `column` 是源文本中的 1-based 字符列号。「第 8 个元素」对应 `tokenIndex`，不要把 `column` 写成元素序号。
 

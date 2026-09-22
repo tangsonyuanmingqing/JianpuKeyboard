@@ -1,6 +1,7 @@
 import '../models/lyric_line.dart';
 import '../models/music_token.dart';
 import '../models/score.dart';
+import '../models/source_position.dart';
 import '../models/validation_message.dart';
 import '../syntax/jianpu_syntax.dart';
 
@@ -8,10 +9,14 @@ import '../syntax/jianpu_syntax.dart';
 class ScoreValidation {
   final List<ValidationMessage> warnings;
   final List<String> unmatchedLyrics;
+  final List<LyricToken> unmatchedLyricTokens;
+  final List<SourcePosition> missingLyricNotePositions;
 
   const ScoreValidation({
     this.warnings = const [],
     this.unmatchedLyrics = const [],
+    this.unmatchedLyricTokens = const [],
+    this.missingLyricNotePositions = const [],
   });
 }
 
@@ -53,24 +58,31 @@ class ScoreValidator {
           ...warnings,
           const ValidationMessage(line: 0, message: missingLyricsMessage),
         ],
+        missingLyricNotePositions: _notes(score)
+            .skip(slots.length)
+            .map((note) => note.position)
+            .toList(),
       );
     }
+
+    final unmatchedSlots = slots.skip(noteCount).toList();
 
     return ScoreValidation(
       warnings: [
         ...warnings,
         const ValidationMessage(line: 0, message: extraLyricsMessage),
       ],
-      unmatchedLyrics: slots.skip(noteCount).toList(),
+      unmatchedLyrics: [for (final slot in unmatchedSlots) slot.text],
+      unmatchedLyricTokens: [for (final slot in unmatchedSlots) slot.token],
     );
   }
 
   /// Syllables always occupy a slot. A continuation occupies a slot only when
   /// a previous syllable exists. Leading continuations do not count.
-  ({List<String> slots, bool ignoredLeadingContinuation}) _walkLyricSlots(
+  ({List<_LyricSlot> slots, bool ignoredLeadingContinuation}) _walkLyricSlots(
     List<LyricLine> lyricLines,
   ) {
-    final slots = <String>[];
+    final slots = <_LyricSlot>[];
     String? previousSyllable;
     var ignoredLeadingContinuation = false;
 
@@ -82,7 +94,7 @@ class ScoreValidator {
 
         if (token.isContinuation) {
           if (previousSyllable != null) {
-            slots.add(JianpuSyntax.holdSymbol);
+            slots.add(_LyricSlot(JianpuSyntax.holdSymbol, token));
           } else {
             ignoredLeadingContinuation = true;
           }
@@ -91,7 +103,7 @@ class ScoreValidator {
 
         if (token.isSyllable) {
           previousSyllable = token.syllable;
-          slots.add(token.syllable!);
+          slots.add(_LyricSlot(token.syllable!, token));
         }
       }
     }
@@ -102,11 +114,16 @@ class ScoreValidator {
     );
   }
 
-  int _consumableNoteCount(Score score) {
-    var count = 0;
-    for (final line in score.lines) {
-      count += line.tokens.whereType<Note>().length;
-    }
-    return count;
-  }
+  int _consumableNoteCount(Score score) => _notes(score).length;
+
+  List<Note> _notes(Score score) => [
+        for (final line in score.lines) ...line.tokens.whereType<Note>(),
+      ];
+}
+
+class _LyricSlot {
+  final String text;
+  final LyricToken token;
+
+  const _LyricSlot(this.text, this.token);
 }

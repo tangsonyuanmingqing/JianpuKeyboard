@@ -35,7 +35,11 @@ class JianpuParser {
 
     for (final line in sections.scoreLines) {
       final tokens = <MusicToken>[];
-      for (final raw in _tokenizer.tokenizeLine(line.text, line.number)) {
+      for (final raw in _tokenizer.tokenizeLine(
+        line.text,
+        line.number,
+        columnOffset: line.columnOffset,
+      )) {
         final token = _classifyScoreToken(raw, errors);
         if (token != null) {
           tokens.add(token);
@@ -140,10 +144,13 @@ class JianpuParser {
       final header = _matchHeader(line.text);
       if (header != null) {
         section = header.section;
-        final remainder = header.remainder.trim();
-        if (remainder.isNotEmpty) {
-          final remainderLine =
-              _SourceLine(number: line.number, text: remainder);
+        final remainder = header.remainder;
+        if (remainder.trim().isNotEmpty) {
+          final remainderLine = _SourceLine(
+            number: line.number,
+            text: remainder,
+            columnOffset: line.text.length - remainder.length,
+          );
           if (section == _Section.score) {
             scoreLines.add(remainderLine);
           } else if (section == _Section.lyrics) {
@@ -192,9 +199,15 @@ class JianpuParser {
         result.add(line);
         continue;
       }
-      final remainder = header.remainder.trim();
-      if (remainder.isNotEmpty) {
-        result.add(_SourceLine(number: line.number, text: remainder));
+      final remainder = header.remainder;
+      if (remainder.trim().isNotEmpty) {
+        result.add(
+          _SourceLine(
+            number: line.number,
+            text: remainder,
+            columnOffset: line.text.length - remainder.length,
+          ),
+        );
       }
     }
     return result;
@@ -234,8 +247,13 @@ enum _Section { none, score, lyrics }
 class _SourceLine {
   final int number;
   final String text;
+  final int columnOffset;
 
-  const _SourceLine({required this.number, required this.text});
+  const _SourceLine({
+    required this.number,
+    required this.text,
+    this.columnOffset = 0,
+  });
 }
 
 class _HeaderMatch {

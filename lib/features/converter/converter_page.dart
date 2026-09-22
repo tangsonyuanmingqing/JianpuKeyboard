@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/lyric_line.dart';
+import '../../core/models/source_position.dart';
 import 'converter_providers.dart';
 import 'mapping_page.dart';
 
@@ -201,6 +203,15 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                   ),
                 ),
               ),
+              ...result.errors.map(
+                (error) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '位置：第 ${error.line} 行，第 ${error.column} 列',
+                    key: Key('error-location-${error.line}-${error.column}'),
+                  ),
+                ),
+              ),
             ],
             if (result != null && result.hasWarnings) ...[
               const SizedBox(height: 12),
@@ -220,8 +231,19 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
             if (result != null && result.unmatchedLyrics.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
-                '未匹配歌词：${result.unmatchedLyrics.join(' ')}',
+                '未匹配歌词：${_formatUnmatchedLyrics(result.unmatchedLyricTokens)}',
                 key: const Key('unmatched-lyrics-text'),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.tertiary,
+                ),
+              ),
+            ],
+            if (result != null &&
+                result.missingLyricNotePositions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                '缺少歌词的位置：${_formatMissingLyricNotes(result.missingLyricNotePositions)}',
+                key: const Key('missing-lyrics-position-text'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.tertiary,
                 ),
@@ -233,3 +255,12 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
     );
   }
 }
+
+String _formatUnmatchedLyrics(List<LyricToken> tokens) => tokens
+    .map((token) =>
+        '${token.rawText}（第 ${token.line} 行第 ${token.elementIndex} 项）')
+    .join(' ');
+
+String _formatMissingLyricNotes(List<SourcePosition> positions) => positions
+    .map((position) => '第 ${position.line} 行第 ${position.tokenIndex} 个元素')
+    .join('、');
