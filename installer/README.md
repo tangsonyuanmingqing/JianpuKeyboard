@@ -5,7 +5,7 @@
 ```powershell
 flutter build windows --release
 iscc installer\jianpu_keyboard.iss
-Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath dist\Jianpu-Keyboard-1.2.0-portable-x64.zip -Force
+Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath dist\jianpu-keyboard-v1.3.0-windows-x64.zip -Force
 Get-FileHash dist\* -Algorithm SHA256 | Format-Table -AutoSize
 ```
 

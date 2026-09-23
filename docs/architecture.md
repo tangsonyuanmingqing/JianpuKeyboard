@@ -40,8 +40,11 @@ Core 不得依赖 Flutter Widget、BuildContext、剪贴板或任何操作系统
 ### Presentation
 
 - `features/converter`：输入、手动转换按钮、复制、清空、错误/警告展示
+- `features/library`：曲谱记录、曲谱库页面、JSON 备份与恢复。曲谱记录保存源输入、元数据和可选的结果快照；结果快照包含字母简谱、键位映射、提示和保存时间
 - 状态管理使用 Riverpod
 - 编辑输入不得自动触发完整转换
+
+曲谱库和当前临时草稿均使用本机 `SharedPreferences` 保存。备份导入在完整校验文件结构后才写入本机存储，避免损坏的备份造成部分更新。
 
 ### 尚未实现
 
