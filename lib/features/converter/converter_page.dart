@@ -15,6 +15,9 @@ import 'format_help_page.dart';
 import 'mapping_page.dart';
 import 'png_export_service.dart';
 import 'semicolon_line_break_formatter.dart';
+import '../library/song_library_page.dart';
+import '../library/song_library_providers.dart';
+import '../library/song_record.dart';
 
 class ConverterPage extends ConsumerStatefulWidget {
   const ConverterPage({super.key});
@@ -79,6 +82,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
       if (confirmed != true || !mounted) return;
     }
     final previous = ref.read(converterInputProvider.notifier).clear();
+    ref.read(currentSongIdProvider.notifier).set(null);
     _scoreController.clear();
     _lyricsController.clear();
     ScaffoldMessenger.of(context)
@@ -96,6 +100,172 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
           ),
         ),
       );
+  }
+
+  Future<void> _openLibrary() async {
+    final action = await Navigator.of(context).push<SongLoadRequest>(
+      MaterialPageRoute(
+          builder: (_) =>
+              SongLibraryPage(currentSongId: ref.read(currentSongIdProvider))),
+    );
+    if (action == null || !mounted) return;
+    final current = ref.read(converterInputProvider);
+    if ((current.scoreText.isNotEmpty || current.lyricsText.isNotEmpty) &&
+        (current.scoreText != action.song.input.scoreText ||
+            current.lyricsText != action.song.input.lyricsText)) {
+      final accepted = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+                  title: const Text('替换当前输入？'),
+                  content: const Text('当前尚未保存的输入将被曲谱库内容替换。'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('取消')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('替换'))
+                  ]));
+      if (accepted != true || !mounted) return;
+    }
+    ref.read(converterInputProvider.notifier).restore(action.song.input);
+    ref.read(currentSongIdProvider.notifier).set(action.song.id);
+    _syncControllers(action.song.input);
+    _showMessage('已填入“${action.song.title}”');
+  }
+
+  Future<void> _saveToLibrary({bool forceCopy = false}) async {
+    final input = ConverterInput(
+        scoreText: _scoreController.text, lyricsText: _lyricsController.text);
+    final library = ref.read(songLibraryProvider);
+    final linkedId = forceCopy ? null : ref.read(currentSongIdProvider);
+    final existing = linkedId == null ? null : _songById(library, linkedId);
+    final fields = await _showSongDialog(existing);
+    if (fields == null || !mounted) return;
+    final now = DateTime.now().toUtc();
+    final result = ref.read(conversionResultProvider);
+    final mapping = ref.read(mappingDraftProvider).validate().mapping;
+    final snapshot = result != null && !result.hasErrors && mapping != null
+        ? SongResultSnapshot(
+            output: result.output,
+            mapping: mapping.toJson(),
+            warnings: result.warnings.map((item) => item.message).toList(),
+            savedAt: now)
+        : null;
+    final id = existing?.id ?? newSongId();
+    final record = SongRecord(
+        id: id,
+        title: fields.title,
+        artist: fields.artist,
+        tags: fields.tags,
+        notes: fields.notes,
+        input: input,
+        result: snapshot ?? existing?.result,
+        resultIsStale: snapshot == null && existing?.result != null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now);
+    try {
+      await ref.read(songLibraryProvider.notifier).saveRecord(record);
+      ref.read(currentSongIdProvider.notifier).set(id);
+      await ref.read(converterDraftPersistenceProvider).save(input, songId: id);
+      if (mounted) _showMessage(snapshot == null ? '已保存输入草稿' : '已保存曲谱和转换结果');
+    } on Object {
+      if (mounted) _showMessage('保存到曲谱库失败，请重试');
+    }
+  }
+
+  Future<_SongFields?> _showSongDialog(SongRecord? existing) async {
+    final title = TextEditingController(text: existing?.title ?? '');
+    final artist = TextEditingController(text: existing?.artist ?? '');
+    final notes = TextEditingController(text: existing?.notes ?? '');
+    final tags = <String>[...?existing?.tags];
+    final tagInput = TextEditingController();
+    final suggestions = {
+      for (final song in ref.read(songLibraryProvider)) ...song.tags
+    }.toList()
+      ..sort();
+    try {
+      return await showDialog<_SongFields>(
+          context: context,
+          builder: (context) => StatefulBuilder(
+              builder: (context, setDialogState) => AlertDialog(
+                    title: Text(existing == null ? '保存到曲谱库' : '保存修改'),
+                    content: SizedBox(
+                        width: 420,
+                        child: SingleChildScrollView(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                              TextField(
+                                  controller: title,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(
+                                      labelText: '歌曲名 *')),
+                              TextField(
+                                  controller: artist,
+                                  decoration:
+                                      const InputDecoration(labelText: '歌手')),
+                              TextField(
+                                  controller: tagInput,
+                                  decoration: const InputDecoration(
+                                      labelText: '标签（输入后按回车）'),
+                                  onSubmitted: (value) {
+                                    final tag = value.trim();
+                                    if (tag.isNotEmpty && !tags.contains(tag))
+                                      setDialogState(() => tags.add(tag));
+                                    tagInput.clear();
+                                  }),
+                              if (tags.isNotEmpty)
+                                Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Wrap(spacing: 4, children: [
+                                      for (final tag in tags)
+                                        InputChip(
+                                            label: Text(tag),
+                                            onDeleted: () => setDialogState(
+                                                () => tags.remove(tag)))
+                                    ])),
+                              if (suggestions.isNotEmpty)
+                                Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Wrap(spacing: 4, children: [
+                                      for (final tag in suggestions
+                                          .where((tag) => !tags.contains(tag)))
+                                        ActionChip(
+                                            label: Text(tag),
+                                            onPressed: () => setDialogState(
+                                                () => tags.add(tag)))
+                                    ])),
+                              TextField(
+                                  controller: notes,
+                                  maxLines: 3,
+                                  decoration:
+                                      const InputDecoration(labelText: '备注')),
+                            ]))),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('取消')),
+                      FilledButton(
+                          onPressed: () {
+                            if (title.text.trim().isEmpty) return;
+                            Navigator.pop(
+                                context,
+                                _SongFields(
+                                    title.text.trim(),
+                                    artist.text.trim(),
+                                    List.unmodifiable(tags),
+                                    notes.text.trim()));
+                          },
+                          child: const Text('保存'))
+                    ],
+                  )));
+    } finally {
+      title.dispose();
+      artist.dispose();
+      notes.dispose();
+      tagInput.dispose();
+    }
   }
 
   Future<void> _showExamples() async {
@@ -226,6 +396,10 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
     ref.watch(converterInputProvider);
     final result = ref.watch(conversionResultProvider);
     final mappingMessage = ref.watch(mappingPersistenceMessageProvider);
+    final currentSongId = ref.watch(currentSongIdProvider);
+    final currentSong = currentSongId == null
+        ? null
+        : _songById(ref.watch(songLibraryProvider), currentSongId);
     final draftMessage = ref.watch(draftPersistenceMessageProvider);
     final output = result?.output ?? '';
     final imageOutput = switch (result?.score) {
@@ -237,6 +411,11 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
       appBar: AppBar(
         title: const Text('数字简谱键盘字母转换器'),
         actions: [
+          IconButton(
+              key: const Key('open-song-library-button'),
+              tooltip: '曲谱库',
+              onPressed: _openLibrary,
+              icon: const Icon(Icons.library_music)),
           IconButton(
             key: const Key('open-mapping-button'),
             tooltip: '键盘映射',
@@ -362,6 +541,16 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                               : _exportImage,
                       child: const Text('导出图片'),
                     ),
+                    FilledButton.tonal(
+                      key: const Key('save-song-button'),
+                      onPressed: () => _saveToLibrary(),
+                      child: Text(currentSong == null ? '保存到曲谱库' : '保存修改'),
+                    ),
+                    if (currentSong != null)
+                      OutlinedButton(
+                        onPressed: () => _saveToLibrary(forceCopy: true),
+                        child: const Text('另存为'),
+                      ),
                     OutlinedButton(
                       key: const Key('clear-button'),
                       onPressed: _clear,
@@ -482,6 +671,21 @@ class _ExampleSelection {
   final bool standardDocument;
 
   const _ExampleSelection(this.example, this.standardDocument);
+}
+
+class _SongFields {
+  final String title;
+  final String artist;
+  final List<String> tags;
+  final String notes;
+  const _SongFields(this.title, this.artist, this.tags, this.notes);
+}
+
+SongRecord? _songById(List<SongRecord> songs, String id) {
+  for (final song in songs) {
+    if (song.id == id) return song;
+  }
+  return null;
 }
 
 String _formatUnmatchedLyrics(List<LyricToken> tokens) => tokens

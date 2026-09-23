@@ -5,6 +5,9 @@ import 'app/app.dart';
 import 'features/converter/converter_draft_persistence.dart';
 import 'features/converter/converter_providers.dart';
 import 'features/converter/mapping_persistence.dart';
+import 'features/library/song_library_persistence.dart';
+import 'features/library/song_library_providers.dart';
+import 'features/library/song_record.dart';
 import 'infrastructure/shared_preferences_mapping_storage.dart';
 
 Future<void> main() async {
@@ -13,6 +16,13 @@ Future<void> main() async {
   final loadedMapping = await persistence.load();
   final draftPersistence = ConverterDraftPersistence();
   final loadedDraft = await draftPersistence.load();
+  final songLibraryPersistence = SongLibraryPersistence();
+  List<SongRecord> loadedSongs;
+  try {
+    loadedSongs = await songLibraryPersistence.load();
+  } on Object {
+    loadedSongs = const [];
+  }
   runApp(
     ProviderScope(
       overrides: [
@@ -27,6 +37,10 @@ Future<void> main() async {
           loadedDraft.message,
         ),
         initialDraftRestoredProvider.overrideWithValue(loadedDraft.wasRestored),
+        songLibraryPersistenceProvider
+            .overrideWithValue(songLibraryPersistence),
+        initialSongLibraryProvider.overrideWithValue(loadedSongs),
+        initialCurrentSongIdProvider.overrideWithValue(loadedDraft.songId),
       ],
       child: const JianpuKeyboardApp(),
     ),

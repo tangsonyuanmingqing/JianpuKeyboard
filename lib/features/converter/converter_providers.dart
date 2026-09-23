@@ -65,7 +65,9 @@ class ConverterInputNotifier extends Notifier<ConverterInput> {
 
   Future<void> _saveDraft(ConverterInput input) async {
     try {
-      await ref.read(converterDraftPersistenceProvider).save(input);
+      await ref
+          .read(converterDraftPersistenceProvider)
+          .save(input, songId: ref.read(currentSongIdProvider));
       ref.read(draftPersistenceMessageProvider.notifier).clear();
     } on Object {
       ref
@@ -255,6 +257,16 @@ final initialConverterInputProvider = Provider<ConverterInput>(
 final initialDraftPersistenceMessageProvider = Provider<String?>((ref) => null);
 
 final initialDraftRestoredProvider = Provider<bool>((ref) => false);
+final initialCurrentSongIdProvider = Provider<String?>((ref) => null);
+
+class CurrentSongIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => ref.read(initialCurrentSongIdProvider);
+  void set(String? songId) => state = songId;
+}
+
+final currentSongIdProvider =
+    NotifierProvider<CurrentSongIdNotifier, String?>(CurrentSongIdNotifier.new);
 
 final draftPersistenceMessageProvider =
     NotifierProvider<DraftPersistenceMessageNotifier, String?>(

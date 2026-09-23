@@ -6,6 +6,7 @@ import 'converter_input.dart';
 
 class ConverterDraftLoadResult {
   final ConverterInput input;
+  final String? songId;
   final bool wasRestored;
   final String? message;
 
@@ -13,6 +14,7 @@ class ConverterDraftLoadResult {
     this.input, {
     this.wasRestored = false,
     this.message,
+    this.songId,
   });
 }
 
@@ -48,10 +50,12 @@ class ConverterDraftPersistence {
       }
       final input =
           ConverterInput(scoreText: scoreText, lyricsText: lyricsText);
+      final rawSongId = decoded['songId'];
       return ConverterDraftLoadResult(
         input,
         wasRestored:
             scoreText.trim().isNotEmpty || lyricsText.trim().isNotEmpty,
+        songId: rawSongId is String && rawSongId.isNotEmpty ? rawSongId : null,
       );
     } on Object {
       return const ConverterDraftLoadResult(
@@ -61,10 +65,14 @@ class ConverterDraftPersistence {
     }
   }
 
-  Future<void> save(ConverterInput input) => _preferences.setString(
+  Future<void> save(ConverterInput input, {String? songId}) =>
+      _preferences.setString(
         _key,
-        jsonEncode(
-            {'scoreText': input.scoreText, 'lyricsText': input.lyricsText}),
+        jsonEncode({
+          'scoreText': input.scoreText,
+          'lyricsText': input.lyricsText,
+          'songId': songId
+        }),
       );
 
   Future<void> clear() => _preferences.remove(_key);
