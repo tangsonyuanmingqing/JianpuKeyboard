@@ -21,6 +21,8 @@ Input
   → Output
 ```
 
+智能表格使用另一条入口：`SmartGridDocument → SmartGridConverter → ConversionResult`。格子已经包含行类型和稳定坐标，因此转换时直接生成对齐输出，不先拼成文本再交给旧解析器。文本模式继续使用原有 Parser 链路。
+
 编辑输入时不自动执行上述链路。剪贴板复制属于 Presentation，不进入 Core。
 
 ## 模块
@@ -39,12 +41,12 @@ Core 不得依赖 Flutter Widget、BuildContext、剪贴板或任何操作系统
 
 ### Presentation
 
-- `features/converter`：输入、手动转换按钮、复制、清空、错误/警告展示
+- `features/converter`：文本输入、智能表格、手动转换按钮、复制、图片导出、清空、错误/警告展示。智能表格模型保存行类型、分组、单元格和视图恢复信息，并在模型层执行可撤销的单元格级位移
 - `features/library`：曲谱记录、曲谱库页面、JSON 备份与恢复。曲谱记录保存源输入、元数据和可选的结果快照；结果快照包含字母简谱、键位映射、提示和保存时间
 - 状态管理使用 Riverpod
 - 编辑输入不得自动触发完整转换
 
-曲谱库和当前临时草稿均使用本机 `SharedPreferences` 保存。备份导入在完整校验文件结构后才写入本机存储，避免损坏的备份造成部分更新。
+曲谱库和当前临时草稿均使用本机 `SharedPreferences` 保存。曲谱库 v2 同时保存智能表格和规范文本表示，并兼容读取 v1。备份导入在完整校验文件结构后才写入本机存储，避免损坏的备份造成部分更新。
 
 ### 尚未实现
 

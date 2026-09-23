@@ -1,5 +1,6 @@
 import '../../core/mapping/keyboard_mapping.dart';
 import '../converter/converter_input.dart';
+import '../converter/smart_grid_document.dart';
 
 /// A named, locally stored song draft.  Its source is always retained even
 /// when conversion produced errors.
@@ -10,6 +11,8 @@ class SongRecord {
   final List<String> tags;
   final String notes;
   final ConverterInput input;
+  final SmartGridDocument? gridDocument;
+  final String editorMode;
   final SongResultSnapshot? result;
   final bool resultIsStale;
   final DateTime createdAt;
@@ -22,6 +25,8 @@ class SongRecord {
     this.tags = const [],
     this.notes = '',
     required this.input,
+    this.gridDocument,
+    this.editorMode = 'text',
     this.result,
     this.resultIsStale = false,
     required this.createdAt,
@@ -34,6 +39,8 @@ class SongRecord {
     List<String>? tags,
     String? notes,
     ConverterInput? input,
+    SmartGridDocument? gridDocument,
+    String? editorMode,
     SongResultSnapshot? result,
     bool? resultIsStale,
     bool clearResult = false,
@@ -46,6 +53,8 @@ class SongRecord {
         tags: tags ?? this.tags,
         notes: notes ?? this.notes,
         input: input ?? this.input,
+        gridDocument: gridDocument ?? this.gridDocument,
+        editorMode: editorMode ?? this.editorMode,
         result: clearResult ? null : result ?? this.result,
         resultIsStale:
             clearResult ? false : resultIsStale ?? this.resultIsStale,
@@ -61,6 +70,8 @@ class SongRecord {
         'notes': notes,
         'scoreText': input.scoreText,
         'lyricsText': input.lyricsText,
+        'gridDocument': gridDocument?.toJson(),
+        'editorMode': editorMode,
         'result': result?.toJson(),
         'resultIsStale': resultIsStale,
         'createdAt': createdAt.toUtc().toIso8601String(),
@@ -97,6 +108,10 @@ class SongRecord {
     final result =
         rawResult == null ? null : SongResultSnapshot.fromJson(rawResult);
     if (rawResult != null && result == null) return null;
+    final rawGrid = value['gridDocument'];
+    final gridDocument =
+        rawGrid == null ? null : SmartGridDocument.fromJson(rawGrid);
+    if (rawGrid != null && gridDocument == null) return null;
     return SongRecord(
       id: id,
       title: title,
@@ -104,6 +119,8 @@ class SongRecord {
       tags: List<String>.unmodifiable(rawTags.cast<String>()),
       notes: string('notes') ?? '',
       input: ConverterInput(scoreText: scoreText, lyricsText: lyricsText),
+      gridDocument: gridDocument,
+      editorMode: value['editorMode'] == 'grid' ? 'grid' : 'text',
       result: result,
       resultIsStale: value['resultIsStale'] == true,
       createdAt: createdAt.toUtc(),

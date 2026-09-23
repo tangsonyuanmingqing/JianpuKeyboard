@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,11 @@ import 'format_help_page.dart';
 import 'mapping_page.dart';
 import 'png_export_service.dart';
 import 'semicolon_line_break_formatter.dart';
+import 'smart_grid_codec.dart';
+import 'smart_grid_converter.dart';
+import 'smart_grid_document.dart';
+import 'smart_grid_editor.dart';
+import 'smart_grid_inspection_renderer.dart';
 import '../library/song_library_page.dart';
 import '../library/song_library_providers.dart';
 import '../library/song_record.dart';
@@ -26,18 +32,33 @@ class ConverterPage extends ConsumerStatefulWidget {
   ConsumerState<ConverterPage> createState() => _ConverterPageState();
 }
 
-class _ConverterPageState extends ConsumerState<ConverterPage> {
+class _ConverterPageState extends ConsumerState<ConverterPage>
+    with WidgetsBindingObserver {
   late final TextEditingController _scoreController;
   late final TextEditingController _lyricsController;
   final _outputImageKey = GlobalKey();
+  final _gridEditorKey = GlobalKey<SmartGridEditorState>();
   var _isPreparingImageExport = false;
+  SmartGridConversion? _gridConversion;
+  SmartGridDocument? _gridConversionDocument;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final input = ref.read(converterInputProvider);
     _scoreController = TextEditingController(text: input.scoreText);
     _lyricsController = TextEditingController(text: input.lyricsText);
+    if (ref.read(editorModeProvider) == ConverterEditorMode.grid &&
+        ref.read(smartGridDocumentProvider).isEmpty &&
+        (input.scoreText.isNotEmpty || input.lyricsText.isNotEmpty)) {
+      final imported = const SmartGridCodec().importInput(input);
+      if (imported.isValid) {
+        ref
+            .read(smartGridDocumentProvider.notifier)
+            .replaceWithoutInput(imported.document!);
+      }
+    }
     if (ref.read(initialDraftRestoredProvider)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showMessage('已恢复上次草稿');
@@ -47,12 +68,59 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scoreController.dispose();
     _lyricsController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_persistDraftNow());
+    }
+  }
+
+  Future<void> _persistDraftNow() async {
+    final input = ref.read(converterInputProvider);
+    final grid = ref.read(smartGridDocumentProvider);
+    if (input.scoreText.trim().isEmpty &&
+        input.lyricsText.trim().isEmpty &&
+        grid.isEmpty) {
+      return;
+    }
+    try {
+      await ref.read(converterDraftPersistenceProvider).save(
+            input,
+            songId: ref.read(currentSongIdProvider),
+            gridDocument: grid,
+            editorMode: ref.read(editorModeProvider).name,
+          );
+    } on Object {
+      // The regular draft saver displays the recoverable persistence error.
+    }
+  }
+
   void _convert() {
+    if (ref.read(editorModeProvider) == ConverterEditorMode.grid) {
+      final validation = ref.read(mappingDraftProvider).validate();
+      if (!validation.isValid) {
+        ref.read(conversionResultProvider.notifier).convert();
+        return;
+      }
+      final converted = const SmartGridConverter().convert(
+        ref.read(smartGridDocumentProvider),
+        validation.mapping!,
+      );
+      setState(() {
+        _gridConversion = converted;
+        _gridConversionDocument = ref.read(smartGridDocumentProvider);
+      });
+      ref.read(conversionResultProvider.notifier).setResult(converted.result);
+      return;
+    }
     ref
         .read(converterInputProvider.notifier)
         .setScoreText(_scoreController.text);
@@ -63,7 +131,10 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
   }
 
   Future<void> _clear() async {
-    if (_scoreController.text.isNotEmpty || _lyricsController.text.isNotEmpty) {
+    final hasGridInput = !ref.read(smartGridDocumentProvider).isEmpty;
+    if (_scoreController.text.isNotEmpty ||
+        _lyricsController.text.isNotEmpty ||
+        hasGridInput) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -82,7 +153,13 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
       if (confirmed != true || !mounted) return;
     }
     final previous = ref.read(converterInputProvider.notifier).clear();
+    final previousGrid = ref.read(smartGridDocumentProvider);
+    ref.read(smartGridDocumentProvider.notifier).clear();
     ref.read(currentSongIdProvider.notifier).set(null);
+    setState(() {
+      _gridConversion = null;
+      _gridConversionDocument = null;
+    });
     _scoreController.clear();
     _lyricsController.clear();
     ScaffoldMessenger.of(context)
@@ -95,6 +172,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
             label: '撤销',
             onPressed: () {
               ref.read(converterInputProvider.notifier).restore(previous);
+              ref
+                  .read(smartGridDocumentProvider.notifier)
+                  .replaceWithoutInput(previousGrid);
               _syncControllers(previous);
             },
           ),
@@ -129,14 +209,42 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
       if (accepted != true || !mounted) return;
     }
     ref.read(converterInputProvider.notifier).restore(action.song.input);
+    if (action.song.gridDocument != null) {
+      ref
+          .read(smartGridDocumentProvider.notifier)
+          .replaceWithoutInput(action.song.gridDocument!);
+      ref.read(editorModeProvider.notifier).set(
+            action.song.editorMode == 'grid'
+                ? ConverterEditorMode.grid
+                : ConverterEditorMode.text,
+          );
+    } else {
+      final imported = const SmartGridCodec().importInput(action.song.input);
+      if (imported.isValid) {
+        ref
+            .read(smartGridDocumentProvider.notifier)
+            .replaceWithoutInput(imported.document!);
+      }
+      ref.read(editorModeProvider.notifier).set(ConverterEditorMode.text);
+    }
     ref.read(currentSongIdProvider.notifier).set(action.song.id);
+    setState(() {
+      _gridConversion = null;
+      _gridConversionDocument = null;
+    });
     _syncControllers(action.song.input);
     _showMessage('已填入“${action.song.title}”');
   }
 
   Future<void> _saveToLibrary({bool forceCopy = false}) async {
-    final input = ConverterInput(
-        scoreText: _scoreController.text, lyricsText: _lyricsController.text);
+    final mode = ref.read(editorModeProvider);
+    final input = mode == ConverterEditorMode.grid
+        ? const SmartGridCodec()
+            .exportInput(ref.read(smartGridDocumentProvider))
+        : ConverterInput(
+            scoreText: _scoreController.text,
+            lyricsText: _lyricsController.text,
+          );
     final library = ref.read(songLibraryProvider);
     final linkedId = forceCopy ? null : ref.read(currentSongIdProvider);
     final existing = linkedId == null ? null : _songById(library, linkedId);
@@ -160,6 +268,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
         tags: fields.tags,
         notes: fields.notes,
         input: input,
+        gridDocument: ref.read(smartGridDocumentProvider),
+        editorMode: mode.name,
         result: snapshot ?? existing?.result,
         resultIsStale: snapshot == null && existing?.result != null,
         createdAt: existing?.createdAt ?? now,
@@ -167,7 +277,12 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
     try {
       await ref.read(songLibraryProvider.notifier).saveRecord(record);
       ref.read(currentSongIdProvider.notifier).set(id);
-      await ref.read(converterDraftPersistenceProvider).save(input, songId: id);
+      await ref.read(converterDraftPersistenceProvider).save(
+            input,
+            songId: id,
+            gridDocument: ref.read(smartGridDocumentProvider),
+            editorMode: mode.name,
+          );
       if (mounted) _showMessage(snapshot == null ? '已保存输入草稿' : '已保存曲谱和转换结果');
     } on Object {
       if (mounted) _showMessage('保存到曲谱库失败，请重试');
@@ -211,8 +326,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                                       labelText: '标签（输入后按回车）'),
                                   onSubmitted: (value) {
                                     final tag = value.trim();
-                                    if (tag.isNotEmpty && !tags.contains(tag))
+                                    if (tag.isNotEmpty && !tags.contains(tag)) {
                                       setDialogState(() => tags.add(tag));
+                                    }
                                     tagInput.clear();
                                   }),
                               if (tags.isNotEmpty)
@@ -266,6 +382,186 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
       notes.dispose();
       tagInput.dispose();
     }
+  }
+
+  Future<void> _switchEditorMode(ConverterEditorMode nextMode) async {
+    final current = ref.read(editorModeProvider);
+    if (current == nextMode) return;
+    if (nextMode == ConverterEditorMode.grid) {
+      final input = ConverterInput(
+        scoreText: _scoreController.text,
+        lyricsText: _lyricsController.text,
+      );
+      final imported = const SmartGridCodec().importInput(input);
+      if (!imported.isValid) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('暂时无法转换为表格'),
+            content: SingleChildScrollView(
+              child: Text(imported.errors.take(8).join('\n')),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('返回修改'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      final document = imported.document!;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入智能表格？'),
+          content: SizedBox(
+            width: 620,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '将生成 ${document.rows.length} 行 × ${document.columnCount} 列的表格。原文本仍会保留为兼容格式。',
+                ),
+                const SizedBox(height: 12),
+                _gridImportPreview(document),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('导入'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      ref
+          .read(smartGridDocumentProvider.notifier)
+          .replaceWithoutInput(document);
+      ref.read(editorModeProvider.notifier).set(nextMode);
+      ref.read(converterInputProvider.notifier).replace(
+            const SmartGridCodec().exportInput(document),
+          );
+      setState(() {
+        _gridConversion = null;
+        _gridConversionDocument = null;
+      });
+      return;
+    }
+    final input = const SmartGridCodec().exportInput(
+      ref.read(smartGridDocumentProvider),
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('切换到文本输入？'),
+        content: SizedBox(
+          width: 620,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('表格会转换成下面的项目扩展格式，可随时再导入智能表格。'),
+              const SizedBox(height: 12),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 260),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: SelectableText(input.scoreText),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('切换'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    ref.read(editorModeProvider.notifier).set(nextMode);
+    ref.read(converterInputProvider.notifier).replace(input);
+    _syncControllers(input);
+    setState(() {});
+  }
+
+  Widget _gridImportPreview(SmartGridDocument document) {
+    final rows = document.rows.take(6).toList();
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 230),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var index = 0; index < rows.length; index++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(
+                  '${index + 1}  ${rows[index].type == SmartGridRowType.score ? '谱' : '词'}  '
+                  '${rows[index].cells.map((cell) => cell.isEmpty ? '_' : cell).join('  ')}',
+                ),
+              ),
+            if (document.rows.length > rows.length)
+              Text('…另有 ${document.rows.length - rows.length} 行'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _updateGrid(SmartGridDocument document) {
+    ref.read(smartGridDocumentProvider.notifier).update(document);
+    setState(() {});
+  }
+
+  List<SmartGridIssue> _liveGridIssues(SmartGridDocument document) {
+    final issues = <SmartGridIssue>[];
+    for (var row = 0; row < document.rows.length; row++) {
+      for (var column = 0; column < document.columnCount; column++) {
+        final message = validateSmartGridCell(
+          document.rows[row].type,
+          document.rows[row].cells[column],
+        );
+        if (message != null) {
+          issues.add(SmartGridIssue(
+            row: row,
+            column: column,
+            severity: SmartGridIssueSeverity.error,
+            message: message,
+          ));
+        }
+      }
+    }
+    return issues;
   }
 
   Future<void> _showExamples() async {
@@ -331,10 +627,27 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
         : example.input;
     ref.read(converterInputProvider.notifier).replace(input);
     _syncControllers(input);
+    if (ref.read(editorModeProvider) == ConverterEditorMode.grid) {
+      final imported = const SmartGridCodec().importInput(input);
+      if (imported.isValid) {
+        ref
+            .read(smartGridDocumentProvider.notifier)
+            .replaceWithoutInput(imported.document!);
+      } else {
+        ref.read(editorModeProvider.notifier).set(ConverterEditorMode.text);
+      }
+      setState(() {
+        _gridConversion = null;
+        _gridConversionDocument = null;
+      });
+    }
   }
 
   Future<void> _exportImage() async {
-    final result = ref.read(conversionResultProvider);
+    final result = ref.read(conversionResultProvider) ??
+        (ref.read(editorModeProvider) == ConverterEditorMode.grid
+            ? _gridConversion?.result
+            : null);
     if (result == null || result.hasErrors) {
       _showMessage('没有可导出的内容');
       return;
@@ -362,6 +675,29 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
     }
   }
 
+  Future<void> _exportInspectionImage() async {
+    final conversion = _gridConversion;
+    final document = _gridConversionDocument;
+    if (conversion == null || document == null || conversion.result.hasErrors) {
+      _showMessage('没有可导出的检查结果');
+      return;
+    }
+    try {
+      final bytes = await const SmartGridInspectionRenderer().render(
+        document,
+        conversion,
+      );
+      final savedPath = await const PngExportService().export(bytes);
+      if (mounted) {
+        _showMessage(savedPath == null ? '已取消导出' : '检查图已保存');
+      }
+    } on FormatException catch (error) {
+      if (mounted) _showMessage(error.message);
+    } on Object {
+      if (mounted) _showMessage('导出检查图失败，请重试。');
+    }
+  }
+
   void _syncControllers(ConverterInput input) {
     if (_scoreController.text != input.scoreText) {
       _scoreController.text = input.scoreText;
@@ -372,7 +708,10 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
   }
 
   Future<void> _copyOutput() async {
-    final result = ref.read(conversionResultProvider);
+    final result = ref.read(conversionResultProvider) ??
+        (ref.read(editorModeProvider) == ConverterEditorMode.grid
+            ? _gridConversion?.result
+            : null);
     final output = result?.output ?? '';
     if (result == null || output.trim().isEmpty || result.hasErrors) {
       _showMessage('没有可复制的内容');
@@ -395,14 +734,20 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
   Widget build(BuildContext context) {
     ref.watch(converterInputProvider);
     final result = ref.watch(conversionResultProvider);
+    final editorMode = ref.watch(editorModeProvider);
+    final gridDocument = ref.watch(smartGridDocumentProvider);
+    final displayedResult = result ??
+        (editorMode == ConverterEditorMode.grid
+            ? _gridConversion?.result
+            : null);
     final mappingMessage = ref.watch(mappingPersistenceMessageProvider);
     final currentSongId = ref.watch(currentSongIdProvider);
     final currentSong = currentSongId == null
         ? null
         : _songById(ref.watch(songLibraryProvider), currentSongId);
     final draftMessage = ref.watch(draftPersistenceMessageProvider);
-    final output = result?.output ?? '';
-    final imageOutput = switch (result?.score) {
+    final output = displayedResult?.output ?? '';
+    final imageOutput = switch (displayedResult?.score) {
       final score? => const ShareImageTextRenderer().render(score),
       null => output,
     };
@@ -452,45 +797,81 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                TextField(
-                  key: const Key('score-input'),
-                  controller: _scoreController,
-                  inputFormatters: const [SemicolonLineBreakFormatter()],
-                  minLines: 6,
-                  maxLines: 12,
-                  keyboardType: TextInputType.multiline,
-                  decoration: const InputDecoration(
-                    labelText: '数字简谱',
-                    alignLabelWithHint: true,
-                    hintText: '3 4 5 6 7\n或使用 [谱] / [词] 标准格式',
-                    border: OutlineInputBorder(),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<ConverterEditorMode>(
+                    key: const Key('editor-mode-selector'),
+                    segments: const [
+                      ButtonSegment(
+                        value: ConverterEditorMode.grid,
+                        icon: Icon(Icons.grid_on),
+                        label: Text('智能表格'),
+                      ),
+                      ButtonSegment(
+                        value: ConverterEditorMode.text,
+                        icon: Icon(Icons.notes),
+                        label: Text('文本输入'),
+                      ),
+                    ],
+                    selected: {editorMode},
+                    onSelectionChanged: (selection) =>
+                        _switchEditorMode(selection.first),
                   ),
-                  onChanged: (value) {
-                    ref
-                        .read(converterInputProvider.notifier)
-                        .setScoreText(value);
-                  },
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  key: const Key('lyrics-input'),
-                  controller: _lyricsController,
-                  inputFormatters: const [SemicolonLineBreakFormatter()],
-                  minLines: 3,
-                  maxLines: 8,
-                  keyboardType: TextInputType.multiline,
-                  decoration: const InputDecoration(
-                    labelText: '歌词（可选）',
-                    alignLabelWithHint: true,
-                    hintText: '我 爱 你',
-                    border: OutlineInputBorder(),
+                if (editorMode == ConverterEditorMode.grid)
+                  SmartGridEditor(
+                    key: _gridEditorKey,
+                    document: gridDocument,
+                    issues: result != null && _gridConversion != null
+                        ? _gridConversion!.issues
+                        : _liveGridIssues(gridDocument),
+                    onChanged: _updateGrid,
+                    onViewStateChanged: (document) => ref
+                        .read(smartGridDocumentProvider.notifier)
+                        .updateViewState(document),
+                  )
+                else ...[
+                  TextField(
+                    key: const Key('score-input'),
+                    controller: _scoreController,
+                    inputFormatters: const [SemicolonLineBreakFormatter()],
+                    minLines: 6,
+                    maxLines: 12,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(
+                      labelText: '数字简谱',
+                      alignLabelWithHint: true,
+                      hintText: '3 4 5 6 7\n或使用 [谱] / [词] 标准格式',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      ref
+                          .read(converterInputProvider.notifier)
+                          .setScoreText(value);
+                    },
                   ),
-                  onChanged: (value) {
-                    ref
-                        .read(converterInputProvider.notifier)
-                        .setLyricsText(value);
-                  },
-                ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('lyrics-input'),
+                    controller: _lyricsController,
+                    inputFormatters: const [SemicolonLineBreakFormatter()],
+                    minLines: 3,
+                    maxLines: 8,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(
+                      labelText: '歌词（可选）',
+                      alignLabelWithHint: true,
+                      hintText: '我 爱 你',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      ref
+                          .read(converterInputProvider.notifier)
+                          .setLyricsText(value);
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -535,12 +916,23 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                     ),
                     FilledButton.tonal(
                       key: const Key('export-image-button'),
-                      onPressed:
-                          result == null || result.hasErrors || output.isEmpty
-                              ? null
-                              : _exportImage,
+                      onPressed: displayedResult == null ||
+                              displayedResult.hasErrors ||
+                              output.isEmpty
+                          ? null
+                          : _exportImage,
                       child: const Text('导出图片'),
                     ),
+                    if (editorMode == ConverterEditorMode.grid)
+                      FilledButton.tonal(
+                        key: const Key('export-inspection-image-button'),
+                        onPressed: result == null ||
+                                _gridConversion == null ||
+                                result.hasErrors
+                            ? null
+                            : _exportInspectionImage,
+                        child: const Text('导出检查图'),
+                      ),
                     FilledButton.tonal(
                       key: const Key('save-song-button'),
                       onPressed: () => _saveToLibrary(),
@@ -564,6 +956,38 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
+                if (editorMode == ConverterEditorMode.grid &&
+                    _gridConversion != null) ...[
+                  if (result == null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(children: [
+                        Icon(Icons.update,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.tertiary),
+                        const SizedBox(width: 6),
+                        Text(
+                          '结果待更新',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.tertiary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ]),
+                    ),
+                  Opacity(
+                    opacity: result == null ? .55 : 1,
+                    child: SmartGridOutputView(
+                      document: _gridConversionDocument ?? gridDocument,
+                      conversion: _gridConversion!,
+                      onCellTap: (row, column) =>
+                          _gridEditorKey.currentState?.focusCell(row, column),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('纯文本预览', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                ],
                 RepaintBoundary(
                   key: _outputImageKey,
                   child: Container(
@@ -590,9 +1014,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                           ),
                   ),
                 ),
-                if (result != null && result.hasErrors) ...[
+                if (displayedResult != null && displayedResult.hasErrors) ...[
                   const SizedBox(height: 12),
-                  ...result.errors.map(
+                  ...displayedResult.errors.map(
                     (error) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
@@ -603,7 +1027,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                       ),
                     ),
                   ),
-                  ...result.errors.map(
+                  ...displayedResult.errors.map(
                     (error) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
@@ -614,9 +1038,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                     ),
                   ),
                 ],
-                if (result != null && result.hasWarnings) ...[
+                if (displayedResult != null && displayedResult.hasWarnings) ...[
                   const SizedBox(height: 12),
-                  ...result.warnings.map(
+                  ...displayedResult.warnings.map(
                     (warning) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
@@ -629,21 +1053,22 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                     ),
                   ),
                 ],
-                if (result != null && result.unmatchedLyrics.isNotEmpty) ...[
+                if (displayedResult != null &&
+                    displayedResult.unmatchedLyrics.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
-                    '未匹配歌词：${_formatUnmatchedLyrics(result.unmatchedLyricTokens)}',
+                    '未匹配歌词：${_formatUnmatchedLyrics(displayedResult.unmatchedLyricTokens)}',
                     key: const Key('unmatched-lyrics-text'),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.tertiary,
                     ),
                   ),
                 ],
-                if (result != null &&
-                    result.missingLyricNotePositions.isNotEmpty) ...[
+                if (displayedResult != null &&
+                    displayedResult.missingLyricNotePositions.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
-                    '缺少歌词的位置：${_formatMissingLyricNotes(result.missingLyricNotePositions)}',
+                    '缺少歌词的位置：${_formatMissingLyricNotes(displayedResult.missingLyricNotePositions)}',
                     key: const Key('missing-lyrics-position-text'),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.tertiary,

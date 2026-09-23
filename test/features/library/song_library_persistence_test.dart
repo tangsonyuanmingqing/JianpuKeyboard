@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jianpu_keyboard/core/mapping/keyboard_mapping.dart';
 import 'package:jianpu_keyboard/features/converter/converter_input.dart';
+import 'package:jianpu_keyboard/features/converter/smart_grid_document.dart';
 import 'package:jianpu_keyboard/features/library/song_library_persistence.dart';
 import 'package:jianpu_keyboard/features/library/song_record.dart';
 
@@ -14,6 +17,9 @@ void main() {
       tags: const ['练习', '原创'],
       notes: '第一版',
       input: const ConverterInput(scoreText: '3 4 5', lyricsText: '晨 光'),
+      gridDocument:
+          SmartGridDocument.empty(rows: 2, columns: 3).setCell(0, 0, '3'),
+      editorMode: 'grid',
       result: SongResultSnapshot(
         output: 'D F G',
         mapping: const KeyboardMapping().toJson(),
@@ -34,11 +40,28 @@ void main() {
     expect(decoded.single.input.lyricsText, '晨 光');
     expect(decoded.single.result!.output, 'D F G');
     expect(decoded.single.result!.warnings, hasLength(1));
+    expect(decoded.single.editorMode, 'grid');
+    expect(decoded.single.gridDocument!.rows[0].cells[0], '3');
+  });
+
+  test('version 1 backup remains importable as text mode', () {
+    final legacySong = Map<String, Object?>.from(song().toJson())
+      ..remove('gridDocument')
+      ..remove('editorMode');
+    final decoded = SongLibraryPersistence.decodeDocument(
+      jsonEncode({
+        'version': 1,
+        'songs': [legacySong]
+      }),
+    );
+
+    expect(decoded.single.editorMode, 'text');
+    expect(decoded.single.gridDocument, isNull);
   });
 
   test('damaged or unsupported backup is rejected before import', () {
     expect(
-      () => SongLibraryPersistence.decodeDocument('{"version":2,"songs":[]}'),
+      () => SongLibraryPersistence.decodeDocument('{"version":3,"songs":[]}'),
       throwsFormatException,
     );
     expect(

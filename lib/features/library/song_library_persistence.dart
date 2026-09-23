@@ -6,7 +6,7 @@ import 'song_record.dart';
 
 class SongLibraryPersistence {
   static const storageKey = 'jianpu_keyboard.song_library.v1';
-  static const documentVersion = 1;
+  static const documentVersion = 2;
   final SharedPreferencesAsync _preferences;
 
   SongLibraryPersistence({SharedPreferencesAsync? preferences})
@@ -29,7 +29,7 @@ class SongLibraryPersistence {
   static List<SongRecord> decodeDocument(String raw) {
     final decoded = jsonDecode(raw);
     if (decoded is! Map ||
-        decoded['version'] != documentVersion ||
+        (decoded['version'] != 1 && decoded['version'] != documentVersion) ||
         decoded['songs'] is! List)
       throw const FormatException('不是受支持的曲谱库备份文件。');
     final songs = <SongRecord>[];

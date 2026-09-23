@@ -5,6 +5,7 @@ import 'app/app.dart';
 import 'features/converter/converter_draft_persistence.dart';
 import 'features/converter/converter_providers.dart';
 import 'features/converter/mapping_persistence.dart';
+import 'features/converter/smart_grid_document.dart';
 import 'features/library/song_library_persistence.dart';
 import 'features/library/song_library_providers.dart';
 import 'features/library/song_record.dart';
@@ -41,6 +42,14 @@ Future<void> main() async {
             .overrideWithValue(songLibraryPersistence),
         initialSongLibraryProvider.overrideWithValue(loadedSongs),
         initialCurrentSongIdProvider.overrideWithValue(loadedDraft.songId),
+        initialSmartGridDocumentProvider.overrideWithValue(
+          loadedDraft.gridDocument ?? SmartGridDocument.empty(),
+        ),
+        initialEditorModeProvider.overrideWithValue(
+          loadedDraft.editorMode == 'text' && loadedDraft.wasRestored
+              ? ConverterEditorMode.text
+              : ConverterEditorMode.grid,
+        ),
       ],
       child: const JianpuKeyboardApp(),
     ),

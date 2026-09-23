@@ -11,6 +11,8 @@ import '../../infrastructure/shared_preferences_mapping_storage.dart';
 import 'converter_input.dart';
 import 'converter_draft_persistence.dart';
 import 'mapping_persistence.dart';
+import 'smart_grid_codec.dart';
+import 'smart_grid_document.dart';
 
 class ConverterInputNotifier extends Notifier<ConverterInput> {
   Timer? _saveTimer;
@@ -50,6 +52,13 @@ class ConverterInputNotifier extends Notifier<ConverterInput> {
 
   void replace(ConverterInput input) => _replace(input);
 
+  void saveCurrentDraftSoon() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 1), () {
+      unawaited(_saveDraft(state));
+    });
+  }
+
   void _replace(ConverterInput input, {bool saveImmediately = false}) {
     state = input;
     ref.read(conversionResultProvider.notifier).clear();
@@ -65,9 +74,12 @@ class ConverterInputNotifier extends Notifier<ConverterInput> {
 
   Future<void> _saveDraft(ConverterInput input) async {
     try {
-      await ref
-          .read(converterDraftPersistenceProvider)
-          .save(input, songId: ref.read(currentSongIdProvider));
+      await ref.read(converterDraftPersistenceProvider).save(
+            input,
+            songId: ref.read(currentSongIdProvider),
+            gridDocument: ref.read(smartGridDocumentProvider),
+            editorMode: ref.read(editorModeProvider).name,
+          );
       ref.read(draftPersistenceMessageProvider.notifier).clear();
     } on Object {
       ref
@@ -239,6 +251,10 @@ class ConversionResultNotifier extends Notifier<ConversionResult?> {
   void clear() {
     state = null;
   }
+
+  void setResult(ConversionResult result) {
+    state = result;
+  }
 }
 
 final converterInputProvider =
@@ -258,6 +274,52 @@ final initialDraftPersistenceMessageProvider = Provider<String?>((ref) => null);
 
 final initialDraftRestoredProvider = Provider<bool>((ref) => false);
 final initialCurrentSongIdProvider = Provider<String?>((ref) => null);
+final initialSmartGridDocumentProvider = Provider<SmartGridDocument>(
+  (ref) => SmartGridDocument.empty(),
+);
+
+enum ConverterEditorMode { grid, text }
+
+final initialEditorModeProvider = Provider<ConverterEditorMode>(
+  (ref) => ConverterEditorMode.text,
+);
+
+class EditorModeNotifier extends Notifier<ConverterEditorMode> {
+  @override
+  ConverterEditorMode build() => ref.read(initialEditorModeProvider);
+  void set(ConverterEditorMode mode) => state = mode;
+}
+
+final editorModeProvider =
+    NotifierProvider<EditorModeNotifier, ConverterEditorMode>(
+  EditorModeNotifier.new,
+);
+
+class SmartGridDocumentNotifier extends Notifier<SmartGridDocument> {
+  @override
+  SmartGridDocument build() => ref.read(initialSmartGridDocumentProvider);
+
+  void update(SmartGridDocument document) {
+    state = document;
+    ref
+        .read(converterInputProvider.notifier)
+        .replace(const SmartGridCodec().exportInput(document));
+  }
+
+  void replaceWithoutInput(SmartGridDocument document) => state = document;
+
+  void updateViewState(SmartGridDocument document) {
+    state = document;
+    ref.read(converterInputProvider.notifier).saveCurrentDraftSoon();
+  }
+
+  void clear() => state = SmartGridDocument.empty();
+}
+
+final smartGridDocumentProvider =
+    NotifierProvider<SmartGridDocumentNotifier, SmartGridDocument>(
+  SmartGridDocumentNotifier.new,
+);
 
 class CurrentSongIdNotifier extends Notifier<String?> {
   @override

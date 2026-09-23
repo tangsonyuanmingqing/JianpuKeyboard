@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'converter_input.dart';
+import 'smart_grid_document.dart';
 
 class ConverterDraftLoadResult {
   final ConverterInput input;
   final String? songId;
+  final SmartGridDocument? gridDocument;
+  final String editorMode;
   final bool wasRestored;
   final String? message;
 
@@ -15,6 +18,8 @@ class ConverterDraftLoadResult {
     this.wasRestored = false,
     this.message,
     this.songId,
+    this.gridDocument,
+    this.editorMode = 'text',
   });
 }
 
@@ -51,11 +56,17 @@ class ConverterDraftPersistence {
       final input =
           ConverterInput(scoreText: scoreText, lyricsText: lyricsText);
       final rawSongId = decoded['songId'];
+      final rawGrid = decoded['gridDocument'];
+      final gridDocument =
+          rawGrid == null ? null : SmartGridDocument.fromJson(rawGrid);
+      final rawMode = decoded['editorMode'];
       return ConverterDraftLoadResult(
         input,
         wasRestored:
             scoreText.trim().isNotEmpty || lyricsText.trim().isNotEmpty,
         songId: rawSongId is String && rawSongId.isNotEmpty ? rawSongId : null,
+        gridDocument: gridDocument,
+        editorMode: rawMode == 'grid' ? 'grid' : 'text',
       );
     } on Object {
       return const ConverterDraftLoadResult(
@@ -65,13 +76,20 @@ class ConverterDraftPersistence {
     }
   }
 
-  Future<void> save(ConverterInput input, {String? songId}) =>
+  Future<void> save(
+    ConverterInput input, {
+    String? songId,
+    SmartGridDocument? gridDocument,
+    String editorMode = 'text',
+  }) =>
       _preferences.setString(
         _key,
         jsonEncode({
           'scoreText': input.scoreText,
           'lyricsText': input.lyricsText,
-          'songId': songId
+          'songId': songId,
+          'gridDocument': gridDocument?.toJson(),
+          'editorMode': editorMode,
         }),
       );
 
