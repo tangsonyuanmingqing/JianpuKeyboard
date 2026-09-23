@@ -11,10 +11,12 @@ import '../../core/models/source_position.dart';
 import '../../core/renderer/share_image_text_renderer.dart';
 import 'converter_examples.dart';
 import 'converter_input.dart';
+import 'converter_panel_layout_persistence.dart';
 import 'converter_providers.dart';
 import 'format_help_page.dart';
 import 'mapping_page.dart';
 import 'png_export_service.dart';
+import 'resizable_panel.dart';
 import 'semicolon_line_break_formatter.dart';
 import 'smart_grid_codec.dart';
 import 'smart_grid_converter.dart';
@@ -38,6 +40,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
   late final TextEditingController _lyricsController;
   final _outputImageKey = GlobalKey();
   final _gridEditorKey = GlobalKey<SmartGridEditorState>();
+  late final ConverterPanelLayoutPersistence _panelLayoutPersistence;
+  Map<String, ResizablePanelSize> _panelSizes = const {};
   var _isPreparingImageExport = false;
   SmartGridConversion? _gridConversion;
   SmartGridDocument? _gridConversionDocument;
@@ -49,6 +53,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     final input = ref.read(converterInputProvider);
     _scoreController = TextEditingController(text: input.scoreText);
     _lyricsController = TextEditingController(text: input.lyricsText);
+    _panelLayoutPersistence = ConverterPanelLayoutPersistence();
+    unawaited(_restorePanelLayout());
     if (ref.read(editorModeProvider) == ConverterEditorMode.grid &&
         ref.read(smartGridDocumentProvider).isEmpty &&
         (input.scoreText.isNotEmpty || input.lyricsText.isNotEmpty)) {
@@ -65,6 +71,33 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
       });
     }
   }
+
+  Future<void> _restorePanelLayout() async {
+    final saved = await _panelLayoutPersistence.load();
+    if (!mounted || saved.isEmpty) return;
+    setState(() => _panelSizes = saved);
+  }
+
+  ResizablePanelSize _panelSize(String panelId) =>
+      _panelSizes[panelId] ?? const ResizablePanelSize();
+
+  void _updatePanelSize(String panelId, ResizablePanelSize size) {
+    setState(() {
+      final updated = Map<String, ResizablePanelSize>.of(_panelSizes);
+      if (size.isDefault) {
+        updated.remove(panelId);
+      } else {
+        updated[panelId] = size;
+      }
+      _panelSizes = updated;
+    });
+    unawaited(_panelLayoutPersistence.save(_panelSizes));
+  }
+
+  double _textInputDefaultHeight(BuildContext context) =>
+      ((MediaQuery.sizeOf(context).height - 280) / 2)
+          .clamp(ResizablePanel.minHeight, ResizablePanel.defaultHeight)
+          .toDouble();
 
   @override
   void dispose() {
@@ -698,6 +731,40 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     }
   }
 
+  Widget _outputPanel(
+    String value, {
+    bool imageMode = false,
+    double? width,
+  }) {
+    final contents = SelectableText(
+      key: imageMode ? null : const Key('output-text'),
+      value,
+      style: _outputTextStyle,
+    );
+    return RepaintBoundary(
+      key: _outputImageKey,
+      child: Container(
+        width: width,
+        constraints: imageMode ? null : const BoxConstraints.expand(),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border:
+              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: imageMode
+            ? contents
+            : SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: contents,
+                ),
+              ),
+      ),
+    );
+  }
+
   void _syncControllers(ConverterInput input) {
     if (_scoreController.text != input.scoreText) {
       _scoreController.text = input.scoreText;
@@ -830,46 +897,63 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                     onViewStateChanged: (document) => ref
                         .read(smartGridDocumentProvider.notifier)
                         .updateViewState(document),
+                    panelSize: _panelSize('smart-grid'),
+                    onPanelSizeChanged: (size) =>
+                        _updatePanelSize('smart-grid', size),
                   )
                 else ...[
-                  TextField(
-                    key: const Key('score-input'),
-                    controller: _scoreController,
-                    inputFormatters: const [SemicolonLineBreakFormatter()],
-                    minLines: 6,
-                    maxLines: 12,
-                    keyboardType: TextInputType.multiline,
-                    decoration: const InputDecoration(
-                      labelText: '数字简谱',
-                      alignLabelWithHint: true,
-                      hintText: '3 4 5 6 7\n或使用 [谱] / [词] 标准格式',
-                      border: OutlineInputBorder(),
+                  ResizablePanel(
+                    panelId: 'score-input',
+                    size: _panelSize('score-input'),
+                    onSizeChanged: (size) =>
+                        _updatePanelSize('score-input', size),
+                    initialHeight: _textInputDefaultHeight(context),
+                    child: TextField(
+                      key: const Key('score-input'),
+                      controller: _scoreController,
+                      inputFormatters: const [SemicolonLineBreakFormatter()],
+                      expands: true,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      decoration: const InputDecoration(
+                        labelText: '数字简谱',
+                        alignLabelWithHint: true,
+                        hintText: '3 4 5 6 7\n或使用 [谱] / [词] 标准格式',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        ref
+                            .read(converterInputProvider.notifier)
+                            .setScoreText(value);
+                      },
                     ),
-                    onChanged: (value) {
-                      ref
-                          .read(converterInputProvider.notifier)
-                          .setScoreText(value);
-                    },
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    key: const Key('lyrics-input'),
-                    controller: _lyricsController,
-                    inputFormatters: const [SemicolonLineBreakFormatter()],
-                    minLines: 3,
-                    maxLines: 8,
-                    keyboardType: TextInputType.multiline,
-                    decoration: const InputDecoration(
-                      labelText: '歌词（可选）',
-                      alignLabelWithHint: true,
-                      hintText: '我 爱 你',
-                      border: OutlineInputBorder(),
+                  ResizablePanel(
+                    panelId: 'lyrics-input',
+                    size: _panelSize('lyrics-input'),
+                    onSizeChanged: (size) =>
+                        _updatePanelSize('lyrics-input', size),
+                    initialHeight: _textInputDefaultHeight(context),
+                    child: TextField(
+                      key: const Key('lyrics-input'),
+                      controller: _lyricsController,
+                      inputFormatters: const [SemicolonLineBreakFormatter()],
+                      expands: true,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      decoration: const InputDecoration(
+                        labelText: '歌词（可选）',
+                        alignLabelWithHint: true,
+                        hintText: '我 爱 你',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        ref
+                            .read(converterInputProvider.notifier)
+                            .setLyricsText(value);
+                      },
                     ),
-                    onChanged: (value) {
-                      ref
-                          .read(converterInputProvider.notifier)
-                          .setLyricsText(value);
-                    },
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -982,37 +1066,34 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                       conversion: _gridConversion!,
                       onCellTap: (row, column) =>
                           _gridEditorKey.currentState?.focusCell(row, column),
+                      panelSize: _panelSize('letter-grid'),
+                      onPanelSizeChanged: (size) =>
+                          _updatePanelSize('letter-grid', size),
                     ),
                   ),
                   const SizedBox(height: 12),
                   Text('纯文本预览', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 6),
                 ],
-                RepaintBoundary(
-                  key: _outputImageKey,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: _isPreparingImageExport
-                        ? SelectableText(
+                ResizablePanel(
+                  panelId: 'text-preview',
+                  size: _panelSize('text-preview'),
+                  onSizeChanged: (size) =>
+                      _updatePanelSize('text-preview', size),
+                  child: _isPreparingImageExport
+                      ? OverflowBox(
+                          alignment: Alignment.topLeft,
+                          minWidth: 1200,
+                          maxWidth: 1200,
+                          child: _outputPanel(
                             imageOutput.isEmpty ? '转换结果将显示在这里' : imageOutput,
-                            style: _outputTextStyle,
-                          )
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SelectableText(
-                              key: const Key('output-text'),
-                              output.isEmpty ? '转换结果将显示在这里' : output,
-                              style: _outputTextStyle,
-                            ),
+                            imageMode: true,
+                            width: 1200,
                           ),
-                  ),
+                        )
+                      : _outputPanel(
+                          output.isEmpty ? '转换结果将显示在这里' : output,
+                        ),
                 ),
                 if (displayedResult != null && displayedResult.hasErrors) ...[
                   const SizedBox(height: 12),

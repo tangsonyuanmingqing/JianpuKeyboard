@@ -1,5 +1,5 @@
 #define MyAppName "Jianpu Keyboard"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.5.0"
 #define MyAppPublisher "tangsonyuanmingqing"
 #define MyAppExeName "jianpu_keyboard.exe"
 

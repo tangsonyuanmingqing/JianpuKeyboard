@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'smart_grid_converter.dart';
 import 'smart_grid_codec.dart';
 import 'smart_grid_document.dart';
+import 'resizable_panel.dart';
 
 class SmartGridEditor extends StatefulWidget {
   final SmartGridDocument document;
@@ -13,6 +14,8 @@ class SmartGridEditor extends StatefulWidget {
   final ValueChanged<SmartGridDocument>? onViewStateChanged;
   final List<SmartGridIssue> issues;
   final ValueChanged<(int, int)>? onSelectionChanged;
+  final ResizablePanelSize panelSize;
+  final ValueChanged<ResizablePanelSize>? onPanelSizeChanged;
 
   const SmartGridEditor({
     super.key,
@@ -21,6 +24,8 @@ class SmartGridEditor extends StatefulWidget {
     this.onViewStateChanged,
     this.issues = const [],
     this.onSelectionChanged,
+    this.panelSize = const ResizablePanelSize(),
+    this.onPanelSizeChanged,
   });
 
   @override
@@ -273,58 +278,63 @@ class SmartGridEditorState extends State<SmartGridEditor> {
             ),
           ]),
           const SizedBox(height: 8),
-          Container(
-            height: 360,
-            decoration: BoxDecoration(
-              border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Stack(
-              children: [
-                Scrollbar(
-                  controller: _horizontal,
-                  thumbVisibility: true,
-                  notificationPredicate: (notification) =>
-                      notification.metrics.axis == Axis.horizontal,
-                  child: SingleChildScrollView(
+          ResizablePanel(
+            panelId: 'smart-grid',
+            size: widget.panelSize,
+            onSizeChanged: widget.onPanelSizeChanged ?? (_) {},
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Stack(
+                children: [
+                  Scrollbar(
                     controller: _horizontal,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: 46 + 86 + widget.document.columnCount * _cellSize,
-                      child: Column(children: [
-                        _header(context),
-                        Expanded(
-                          child: Scrollbar(
-                            controller: _vertical,
-                            thumbVisibility: true,
-                            child: ReorderableListView.builder(
-                              scrollController: _vertical,
-                              buildDefaultDragHandles: false,
-                              itemCount: widget.document.rows.length,
-                              itemBuilder: (context, row) => KeyedSubtree(
-                                key: ValueKey(widget.document.rows[row].id),
-                                child: _row(context, row),
-                              ),
-                              onReorderItem: (oldIndex, newIndex) => _apply(
-                                widget.document
-                                    .reorderGroup(oldIndex, newIndex),
+                    thumbVisibility: true,
+                    notificationPredicate: (notification) =>
+                        notification.metrics.axis == Axis.horizontal,
+                    child: SingleChildScrollView(
+                      controller: _horizontal,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width:
+                            46 + 86 + widget.document.columnCount * _cellSize,
+                        child: Column(children: [
+                          _header(context),
+                          Expanded(
+                            child: Scrollbar(
+                              controller: _vertical,
+                              thumbVisibility: true,
+                              child: ReorderableListView.builder(
+                                scrollController: _vertical,
+                                buildDefaultDragHandles: false,
+                                itemCount: widget.document.rows.length,
+                                itemBuilder: (context, row) => KeyedSubtree(
+                                  key: ValueKey(widget.document.rows[row].id),
+                                  child: _row(context, row),
+                                ),
+                                onReorderItem: (oldIndex, newIndex) => _apply(
+                                  widget.document
+                                      .reorderGroup(oldIndex, newIndex),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ]),
+                        ]),
+                      ),
                     ),
                   ),
-                ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 132,
-                  child: _frozenPane(context),
-                ),
-              ],
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 132,
+                    child: _frozenPane(context),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -1046,12 +1056,16 @@ class SmartGridOutputView extends StatefulWidget {
   final SmartGridDocument document;
   final SmartGridConversion conversion;
   final void Function(int row, int column)? onCellTap;
+  final ResizablePanelSize panelSize;
+  final ValueChanged<ResizablePanelSize>? onPanelSizeChanged;
 
   const SmartGridOutputView({
     super.key,
     required this.document,
     required this.conversion,
     this.onCellTap,
+    this.panelSize = const ResizablePanelSize(),
+    this.onPanelSizeChanged,
   });
 
   @override
@@ -1083,83 +1097,88 @@ class _SmartGridOutputViewState extends State<SmartGridOutputView> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 300,
-      decoration: BoxDecoration(
-          border:
-              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(8)),
-      child: Stack(
-        children: [
-          SingleChildScrollView(
-            controller: _horizontal,
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 132 + widget.document.columnCount * _cellSize,
-              child: Column(children: [
-                SizedBox(
+    return ResizablePanel(
+      panelId: 'letter-grid',
+      size: widget.panelSize,
+      onSizeChanged: widget.onPanelSizeChanged ?? (_) {},
+      child: Container(
+        decoration: BoxDecoration(
+            border:
+                Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(8)),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              controller: _horizontal,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: 132 + widget.document.columnCount * _cellSize,
+                child: Column(children: [
+                  SizedBox(
+                      height: 38,
+                      child: Row(children: [
+                        _cell(context, '#', 46, header: true),
+                        _cell(context, '类型', 86, header: true),
+                        for (var column = 0;
+                            column < widget.document.columnCount;
+                            column++)
+                          _cell(
+                              context, smartGridColumnLabel(column), _cellSize,
+                              header: true),
+                      ])),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _vertical,
+                      itemCount: widget.document.rows.length,
+                      itemBuilder: (context, row) => SizedBox(
+                        height: _cellSize,
+                        child: Row(children: [
+                          _cell(context, '${row + 1}', 46, header: true),
+                          _cell(context, _rowLabel(row), 86, header: true),
+                          for (var column = 0;
+                              column < widget.document.columnCount;
+                              column++)
+                            _outputCell(context, row, column, _cellSize),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 132,
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: Column(children: [
+                  SizedBox(
                     height: 38,
                     child: Row(children: [
                       _cell(context, '#', 46, header: true),
                       _cell(context, '类型', 86, header: true),
-                      for (var column = 0;
-                          column < widget.document.columnCount;
-                          column++)
-                        _cell(context, smartGridColumnLabel(column), _cellSize,
-                            header: true),
-                    ])),
-                Expanded(
-                  child: ListView.builder(
-                    controller: _vertical,
-                    itemCount: widget.document.rows.length,
-                    itemBuilder: (context, row) => SizedBox(
-                      height: _cellSize,
-                      child: Row(children: [
-                        _cell(context, '${row + 1}', 46, header: true),
-                        _cell(context, _rowLabel(row), 86, header: true),
-                        for (var column = 0;
-                            column < widget.document.columnCount;
-                            column++)
-                          _outputCell(context, row, column, _cellSize),
-                      ]),
+                    ]),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _frozenVertical,
+                      itemCount: widget.document.rows.length,
+                      itemBuilder: (context, row) => SizedBox(
+                        height: _cellSize,
+                        child: Row(children: [
+                          _cell(context, '${row + 1}', 46, header: true),
+                          _cell(context, _rowLabel(row), 86, header: true),
+                        ]),
+                      ),
                     ),
                   ),
-                ),
-              ]),
+                ]),
+              ),
             ),
-          ),
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 132,
-            child: ColoredBox(
-              color: Theme.of(context).colorScheme.surface,
-              child: Column(children: [
-                SizedBox(
-                  height: 38,
-                  child: Row(children: [
-                    _cell(context, '#', 46, header: true),
-                    _cell(context, '类型', 86, header: true),
-                  ]),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: _frozenVertical,
-                    itemCount: widget.document.rows.length,
-                    itemBuilder: (context, row) => SizedBox(
-                      height: _cellSize,
-                      child: Row(children: [
-                        _cell(context, '${row + 1}', 46, header: true),
-                        _cell(context, _rowLabel(row), 86, header: true),
-                      ]),
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
