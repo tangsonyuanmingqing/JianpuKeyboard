@@ -27,6 +27,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
   late final TextEditingController _scoreController;
   late final TextEditingController _lyricsController;
   final _outputImageKey = GlobalKey();
+  var _isPreparingImageExport = false;
 
   @override
   void initState() {
@@ -164,13 +165,16 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
 
   Future<void> _exportImage() async {
     final result = ref.read(conversionResultProvider);
-    final boundary = _outputImageKey.currentContext?.findRenderObject()
-        as RenderRepaintBoundary?;
-    if (result == null || result.hasErrors || boundary == null) {
+    if (result == null || result.hasErrors) {
       _showMessage('没有可导出的内容');
       return;
     }
+    setState(() => _isPreparingImageExport = true);
+    await WidgetsBinding.instance.endOfFrame;
     try {
+      final boundary = _outputImageKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) throw StateError('无法生成图片');
       final image = await boundary.toImage(pixelRatio: 3);
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
@@ -181,6 +185,10 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
       _showMessage(savedPath == null ? '已取消导出' : '图片已保存');
     } on Object {
       if (mounted) _showMessage('导出图片失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() => _isPreparingImageExport = false);
+      }
     }
   }
 
@@ -378,21 +386,19 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
                           color: Theme.of(context).colorScheme.outlineVariant),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: SelectableText(
-                      key: const Key('output-text'),
-                      imageOutput.isEmpty ? '转换结果将显示在这里' : imageOutput,
-                      style: const TextStyle(
-                        fontFamily: 'NSimSun',
-                        fontFamilyFallback: [
-                          'SimSun',
-                          'MS Gothic',
-                          'Consolas',
-                          'monospace'
-                        ],
-                        fontSize: 16,
-                        height: 1.5,
-                      ),
-                    ),
+                    child: _isPreparingImageExport
+                        ? SelectableText(
+                            imageOutput.isEmpty ? '转换结果将显示在这里' : imageOutput,
+                            style: _outputTextStyle,
+                          )
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SelectableText(
+                              key: const Key('output-text'),
+                              output.isEmpty ? '转换结果将显示在这里' : output,
+                              style: _outputTextStyle,
+                            ),
+                          ),
                   ),
                 ),
                 if (result != null && result.hasErrors) ...[
@@ -463,6 +469,13 @@ class _ConverterPageState extends ConsumerState<ConverterPage> {
     );
   }
 }
+
+const _outputTextStyle = TextStyle(
+  fontFamily: 'NSimSun',
+  fontFamilyFallback: ['SimSun', 'MS Gothic', 'Consolas', 'monospace'],
+  fontSize: 16,
+  height: 1.5,
+);
 
 class _ExampleSelection {
   final ConverterExample example;

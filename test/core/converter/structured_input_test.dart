@@ -35,6 +35,29 @@ void main() {
     );
   });
 
+  test('keeps an auto-inserted semicolon before // on the same output row', () {
+    final result = converter.convert(
+      scoreText: '''
+[谱] 3 3 4 5 | 5 4 3 -;//2 2 3 4 | 3 2 1 -;
+[词] 晨光落在|窗前 -;//轻声唱起|新的歌 -;
+''',
+    );
+
+    expect(result.errors, isEmpty);
+    expect(result.output.split('\n').first, contains('- //'));
+    expect(result.output.split('\n'), hasLength(2));
+  });
+
+  test('allows spaces between an auto-inserted semicolon and //', () {
+    final result = converter.convert(
+      scoreText: '[谱] 3 4; // 5 6\n[词] 我爱; // 你呀',
+    );
+
+    expect(result.errors, isEmpty);
+    expect(result.output.split('\n'), hasLength(2));
+    expect(result.output.split('\n').first, contains('//'));
+  });
+
   test('reports a missing lyric row within a paired group', () {
     final result = converter.convert(
       scoreText: '[谱] 3; 4\n[词] 我',

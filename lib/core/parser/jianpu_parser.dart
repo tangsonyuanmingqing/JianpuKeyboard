@@ -473,6 +473,8 @@ class _SegmentSplitter {
       if (!isSentence && !isRow) {
         continue;
       }
+      final sentenceAfterRow =
+          isRow ? _sentenceSeparatorAfter(line.text, index + 1) : null;
       final separatorLength = isSentence ? 2 : 1;
       final part = line.text.substring(start, index);
       if (part.trim().isEmpty) {
@@ -481,12 +483,17 @@ class _SegmentSplitter {
         results.add(_piece(line, part, start));
       }
       sawSeparator = true;
-      if (isSentence) {
+      if (isSentence || sentenceAfterRow != null) {
         _sentence += 1;
       } else {
         _row += 1;
       }
-      start = index + separatorLength;
+      if (sentenceAfterRow != null) {
+        start = sentenceAfterRow + JianpuSyntax.sentenceSeparator.length;
+        index = start - 1;
+      } else {
+        start = index + separatorLength;
+      }
       if (isSentence) {
         index += 1;
       }
@@ -499,6 +506,16 @@ class _SegmentSplitter {
       _previousLineEnded = true;
     }
     return results;
+  }
+
+  int? _sentenceSeparatorAfter(String text, int start) {
+    var index = start;
+    while (index < text.length && text[index].trim().isEmpty) {
+      index += 1;
+    }
+    return text.startsWith(JianpuSyntax.sentenceSeparator, index)
+        ? index
+        : null;
   }
 
   _SourceLine _piece(_SourceLine line, String text, int offset) => _SourceLine(

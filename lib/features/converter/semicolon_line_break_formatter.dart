@@ -12,10 +12,8 @@ class SemicolonLineBreakFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    if (newValue.text.length != oldValue.text.length + 1) return newValue;
-
-    final insertion = _insertionIndex(oldValue.text, newValue.text);
-    if (insertion == null || newValue.text[insertion] != '\n') return newValue;
+    final insertion = _enteredLineBreakAtCursor(oldValue, newValue);
+    if (insertion == null) return newValue;
 
     final lineStart = newValue.text.lastIndexOf('\n', insertion - 1) + 1;
     final line = newValue.text.substring(lineStart, insertion).trimRight();
@@ -35,10 +33,43 @@ class SemicolonLineBreakFormatter extends TextInputFormatter {
     );
   }
 
-  int? _insertionIndex(String oldText, String newText) {
-    for (var index = 0; index < oldText.length; index++) {
-      if (oldText[index] != newText[index]) return index;
+  int? _enteredLineBreakAtCursor(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final selection = oldValue.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      return null;
     }
-    return oldText.length;
+
+    final insertion = selection.baseOffset;
+    if (insertion > oldValue.text.length || insertion > newValue.text.length) {
+      return null;
+    }
+    if (oldValue.text.substring(0, insertion) !=
+        newValue.text.substring(0, insertion)) {
+      return null;
+    }
+
+    final oldTail = oldValue.text.substring(insertion);
+    final newTail = newValue.text.substring(insertion);
+    final lineBreakLength = _leadingLineBreakLength(newTail);
+    if (lineBreakLength == null) return null;
+
+    final remainingNewTail = newTail.substring(lineBreakLength);
+    if (_normalizeLineBreaks(remainingNewTail) !=
+        _normalizeLineBreaks(oldTail)) {
+      return null;
+    }
+
+    return insertion;
   }
+
+  int? _leadingLineBreakLength(String value) {
+    if (value.startsWith('\r\n')) return 2;
+    if (value.startsWith('\n')) return 1;
+    return null;
+  }
+
+  String _normalizeLineBreaks(String value) => value.replaceAll('\r\n', '\n');
 }

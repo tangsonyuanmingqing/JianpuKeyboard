@@ -31,6 +31,38 @@ void main() {
     expect(find.text('转换结果将显示在这里'), findsOneWidget);
   });
 
+  testWidgets('adds a semicolon when Enter is pressed before later score text',
+      (tester) async {
+    await pumpPage(tester);
+    final scoreInput = find.byKey(const Key('score-input'));
+    await tester.enterText(scoreInput, '3 4 5\n[词] 我爱');
+    await tester.tap(scoreInput);
+    tester
+        .widget<EditableText>(
+          find.descendant(of: scoreInput, matching: find.byType(EditableText)),
+        )
+        .controller
+        .selection = const TextSelection.collapsed(offset: 5);
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '3 4 5\n\n[词] 我爱',
+        selection: TextSelection.collapsed(offset: 6),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+                of: scoreInput, matching: find.byType(EditableText)),
+          )
+          .controller
+          .text,
+      '3 4 5;\n\n[词] 我爱',
+    );
+  });
+
   testWidgets('converts only after the convert button is pressed',
       (tester) async {
     await pumpPage(tester);
@@ -108,6 +140,40 @@ void main() {
     await tester.pump();
 
     expect(clipboardText, 'D F G');
+  });
+
+  testWidgets('keeps long structured score rows on one visual text line',
+      (tester) async {
+    final container = ProviderContainer();
+    await pumpPage(tester, container: container);
+
+    await tester.enterText(
+      find.byKey(const Key('score-input')),
+      '''[谱] 3 3 4 5 | 5 4 3 - // 2 2 3 4 | 3 2 1 -;
+[词] 晨 光 落 在 | 窗 前 - // 轻 声 唱 起 | 新 的 歌 -;''',
+    );
+    await tester.tap(find.byKey(const Key('convert-button')));
+    await tester.pump();
+
+    final displayed = tester
+        .widget<SelectableText>(find.byKey(const Key('output-text')))
+        .data!;
+    final converted = container.read(conversionResultProvider)!.output;
+    expect(converted.split('\n'), hasLength(2));
+    expect(displayed, converted);
+    expect(
+      find.ancestor(
+        of: find.byKey(const Key('output-text')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is SingleChildScrollView &&
+              widget.scrollDirection == Axis.horizontal,
+        ),
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    container.dispose();
   });
 
   testWidgets('aligns lyric continuation under the continued note',

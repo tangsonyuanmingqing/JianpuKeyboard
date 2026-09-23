@@ -5,32 +5,52 @@ import 'package:jianpu_keyboard/features/converter/semicolon_line_break_formatte
 void main() {
   const formatter = SemicolonLineBreakFormatter();
 
-  TextEditingValue value(String text, {int? cursor}) => TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: cursor ?? text.length),
-      );
+  test('adds a visible semicolon before a Windows Enter line break', () {
+    const oldValue = TextEditingValue(
+      text: '3 4 5',
+      selection: TextSelection.collapsed(offset: 5),
+    );
+    const newValue = TextEditingValue(
+      text: '3 4 5\r\n',
+      selection: TextSelection.collapsed(offset: 7),
+    );
 
-  test('adds a row separator before a typed line break', () {
-    final result = formatter.formatEditUpdate(value('3 4 5'), value('3 4 5\n'));
+    final formatted = formatter.formatEditUpdate(oldValue, newValue);
 
-    expect(result.text, '3 4 5;\n');
-    expect(result.selection.baseOffset, 7);
+    expect(formatted.text, '3 4 5;\r\n');
+    expect(formatted.selection.baseOffset, 8);
   });
 
-  test('does not add another separator after one or after a header', () {
-    expect(
-      formatter.formatEditUpdate(value('3 4;'), value('3 4;\n')).text,
-      '3 4;\n',
+  test('keeps one visible semicolon before a Unix Enter line break', () {
+    const oldValue = TextEditingValue(
+      text: '3 4 5',
+      selection: TextSelection.collapsed(offset: 5),
     );
-    expect(
-      formatter.formatEditUpdate(value('[谱]'), value('[谱]\n')).text,
-      '[谱]\n',
+    const newValue = TextEditingValue(
+      text: '3 4 5\n',
+      selection: TextSelection.collapsed(offset: 6),
     );
+
+    final formatted = formatter.formatEditUpdate(oldValue, newValue);
+
+    expect(formatted.text, '3 4 5;\n');
+    expect(formatted.selection.baseOffset, 7);
   });
 
-  test('keeps pasted multi-line text unchanged', () {
-    final result = formatter.formatEditUpdate(value(''), value('3 4\n5 6'));
+  test('adds a semicolon when Enter normalizes a middle Windows line break',
+      () {
+    const oldValue = TextEditingValue(
+      text: '3 4 5\r\n[词] 我爱',
+      selection: TextSelection.collapsed(offset: 5),
+    );
+    const newValue = TextEditingValue(
+      text: '3 4 5\n\n[词] 我爱',
+      selection: TextSelection.collapsed(offset: 6),
+    );
 
-    expect(result.text, '3 4\n5 6');
+    final formatted = formatter.formatEditUpdate(oldValue, newValue);
+
+    expect(formatted.text, '3 4 5;\n\n[词] 我爱');
+    expect(formatted.selection.baseOffset, 7);
   });
 }
