@@ -10,11 +10,13 @@ class RenderCell {
   final String letterText;
   final String lyricText;
   final bool isMeasureBar;
+  final int minimumColumnWidth;
 
   const RenderCell({
     required this.letterText,
     required this.lyricText,
     this.isMeasureBar = false,
+    this.minimumColumnWidth = 0,
   });
 
   factory RenderCell.fromToken(MusicToken token) {
@@ -25,13 +27,14 @@ class RenderCell {
         :final isLyricContinuation,
       ) =>
         RenderCell(
-          letterText: keyboardKey ?? '',
+          letterText: toFullwidthKeyboardLetters(keyboardKey ?? ''),
           lyricText:
               isLyricContinuation ? JianpuSyntax.holdSymbol : lyric ?? '',
         ),
       Rest() => const RenderCell(
-          letterText: JianpuSyntax.restSymbol,
+          letterText: '',
           lyricText: '',
+          minimumColumnWidth: 2,
         ),
       Hold() => const RenderCell(
           letterText: JianpuSyntax.holdSymbol,
@@ -48,11 +51,12 @@ class RenderCell {
   const RenderCell.sentenceSeparator()
       : letterText = JianpuSyntax.sentenceSeparator,
         lyricText = JianpuSyntax.sentenceSeparator,
-        isMeasureBar = false;
+        isMeasureBar = false,
+        minimumColumnWidth = 0;
 
   int get columnWidth => max(
-        displayWidth(letterText),
-        displayWidth(lyricText),
+        minimumColumnWidth,
+        max(displayWidth(letterText), displayWidth(lyricText)),
       );
 }
 
@@ -85,7 +89,10 @@ class PlainTextRenderer {
           widths,
         ));
       } else {
-        blocks.add([for (final cell in cells) cell.letterText].join(' '));
+        blocks.add(_renderRow(
+          [for (final cell in cells) cell.letterText],
+          widths,
+        ));
       }
     }
     return blocks.join('\n');
@@ -143,11 +150,7 @@ class PlainTextRenderer {
   }
 
   String _renderRow(List<String> texts, List<int> widths) {
-    final parts = <String>[
-      for (var i = 0; i < texts.length; i++)
-        padToDisplayWidth(texts[i], widths[i]),
-    ];
-    return parts.join(' ').trimRight();
+    return renderCenteredDisplayRow(texts, widths);
   }
 
   bool _noteHasLyric(MusicToken token) {

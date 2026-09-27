@@ -44,7 +44,7 @@ void main() {
 
     provider.read(conversionResultProvider.notifier).convert();
 
-    expect(provider.read(conversionResultProvider)?.output, 'D');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｄ');
     expect(provider.read(mappingDraftErrorsProvider), isEmpty);
   });
 
@@ -52,7 +52,7 @@ void main() {
     final provider = container();
     provider.read(converterInputProvider.notifier).setScoreText('3');
     provider.read(conversionResultProvider.notifier).convert();
-    expect(provider.read(conversionResultProvider)?.output, 'D');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｄ');
 
     provider
         .read(mappingDraftProvider.notifier)
@@ -82,7 +82,7 @@ void main() {
 
     provider.read(conversionResultProvider.notifier).convert();
 
-    expect(provider.read(conversionResultProvider)?.output, 'E');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｅ');
     expect(provider.read(mappingDraftErrorsProvider), isEmpty);
   });
 
@@ -93,7 +93,7 @@ void main() {
         .read(mappingDraftProvider.notifier)
         .updateMapping(draftWithMiddle(3, 'E'));
     provider.read(conversionResultProvider.notifier).convert();
-    expect(provider.read(conversionResultProvider)?.output, 'E');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｅ');
 
     provider.read(mappingDraftProvider.notifier).restoreDefault();
 
@@ -102,14 +102,14 @@ void main() {
     expect(provider.read(mappingDraftErrorsProvider), isEmpty);
 
     provider.read(conversionResultProvider.notifier).convert();
-    expect(provider.read(conversionResultProvider)?.output, 'D');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｄ');
   });
 
   test('keeps the result empty when the mapping draft is invalid', () {
     final provider = container();
     provider.read(converterInputProvider.notifier).setScoreText('3');
     provider.read(conversionResultProvider.notifier).convert();
-    expect(provider.read(conversionResultProvider)?.output, 'D');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｄ');
 
     provider
         .read(mappingDraftProvider.notifier)
@@ -134,7 +134,7 @@ void main() {
 
     final result = provider.read(conversionResultProvider);
     expect(result, isNotNull);
-    expect(result!.output, 'A A');
+    expect(result!.output, 'Ａ Ａ');
     expect(result.errors, isEmpty);
     expect(result.warnings.single.message, '键 A 被多个音符使用');
     expect(provider.read(mappingDraftErrorsProvider), isEmpty);
@@ -151,6 +151,6 @@ void main() {
     expect(provider.read(mappingDraftProvider).middle?[2], 'E');
     provider.read(converterInputProvider.notifier).setScoreText('3');
     provider.read(conversionResultProvider.notifier).convert();
-    expect(provider.read(conversionResultProvider)?.output, 'E');
+    expect(provider.read(conversionResultProvider)?.output, 'Ｅ');
   });
 }

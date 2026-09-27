@@ -73,6 +73,19 @@ class SmartGridRow {
   }
 }
 
+/// Result of overwriting adjacent cells from a single smart-grid edit.
+class SmartGridCellWriteResult {
+  const SmartGridCellWriteResult({
+    required this.document,
+    required this.writtenCount,
+    required this.omittedCount,
+  });
+
+  final SmartGridDocument document;
+  final int writtenCount;
+  final int omittedCount;
+}
+
 class SmartGridDocument {
   static const jsonVersion = 2;
   static const maxRows = 500;
@@ -120,6 +133,41 @@ class SmartGridDocument {
     cells[columnIndex] = normalized == '_' ? '' : normalized;
     nextRows[rowIndex] = nextRows[rowIndex].copyWith(cells: cells);
     return copyWith(rows: nextRows);
+  }
+
+  /// Overwrites cells to the right of [startColumn], expanding columns when
+  /// possible. The operation returns one document so callers can undo a
+  /// multi-cell lyric insertion in a single step.
+  SmartGridCellWriteResult overwriteCells(
+    int rowIndex,
+    int startColumn,
+    List<String> values, {
+    bool keepTrailingCell = false,
+  }) {
+    if (rowIndex < 0 ||
+        rowIndex >= rows.length ||
+        startColumn < 0 ||
+        startColumn >= columnCount ||
+        values.isEmpty) {
+      return SmartGridCellWriteResult(
+        document: this,
+        writtenCount: 0,
+        omittedCount: values.length,
+      );
+    }
+
+    final desiredColumns =
+        startColumn + values.length + (keepTrailingCell ? 1 : 0);
+    var next = ensureSize(rows.length, desiredColumns);
+    final writable = (next.columnCount - startColumn).clamp(0, values.length);
+    for (var offset = 0; offset < writable; offset++) {
+      next = next.setCell(rowIndex, startColumn + offset, values[offset]);
+    }
+    return SmartGridCellWriteResult(
+      document: next,
+      writtenCount: writable,
+      omittedCount: values.length - writable,
+    );
   }
 
   SmartGridDocument setRowType(int rowIndex, SmartGridRowType type) {

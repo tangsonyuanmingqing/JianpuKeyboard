@@ -6,6 +6,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme/app_typography.dart';
+import '../../app/theme/app_theme_mode.dart';
+import '../../app/window/window_pin.dart';
+import '../../infrastructure/storage_health.dart';
 import '../../core/models/lyric_line.dart';
 import '../../core/models/source_position.dart';
 import '../../core/renderer/share_image_text_renderer.dart';
@@ -18,12 +22,16 @@ import 'mapping_page.dart';
 import 'png_export_service.dart';
 import 'resizable_panel.dart';
 import 'semicolon_line_break_formatter.dart';
+import 'song_output_formatter.dart';
 import 'smart_grid_codec.dart';
 import 'smart_grid_converter.dart';
 import 'smart_grid_document.dart';
 import 'smart_grid_editor.dart';
 import 'smart_grid_inspection_renderer.dart';
+import 'smart_grid_validation.dart';
+import 'table_scale.dart';
 import '../library/song_library_page.dart';
+import '../library/recovery_center_page.dart';
 import '../library/song_library_providers.dart';
 import '../library/song_record.dart';
 
@@ -38,6 +46,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     with WidgetsBindingObserver {
   late final TextEditingController _scoreController;
   late final TextEditingController _lyricsController;
+  late final TextEditingController _songTitleController;
+  final FocusNode _scoreFocusNode = FocusNode();
   final _outputImageKey = GlobalKey();
   final _gridEditorKey = GlobalKey<SmartGridEditorState>();
   late final ConverterPanelLayoutPersistence _panelLayoutPersistence;
@@ -53,7 +63,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     final input = ref.read(converterInputProvider);
     _scoreController = TextEditingController(text: input.scoreText);
     _lyricsController = TextEditingController(text: input.lyricsText);
-    _panelLayoutPersistence = ConverterPanelLayoutPersistence();
+    _songTitleController =
+        TextEditingController(text: ref.read(songTitleProvider));
+    _panelLayoutPersistence = ref.read(converterPanelLayoutPersistenceProvider);
     unawaited(_restorePanelLayout());
     if (ref.read(editorModeProvider) == ConverterEditorMode.grid &&
         ref.read(smartGridDocumentProvider).isEmpty &&
@@ -104,6 +116,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     WidgetsBinding.instance.removeObserver(this);
     _scoreController.dispose();
     _lyricsController.dispose();
+    _songTitleController.dispose();
+    _scoreFocusNode.dispose();
     super.dispose();
   }
 
@@ -117,20 +131,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
   }
 
   Future<void> _persistDraftNow() async {
-    final input = ref.read(converterInputProvider);
-    final grid = ref.read(smartGridDocumentProvider);
-    if (input.scoreText.trim().isEmpty &&
-        input.lyricsText.trim().isEmpty &&
-        grid.isEmpty) {
-      return;
-    }
     try {
-      await ref.read(converterDraftPersistenceProvider).save(
-            input,
-            songId: ref.read(currentSongIdProvider),
-            gridDocument: grid,
-            editorMode: ref.read(editorModeProvider).name,
-          );
+      await ref.read(converterInputProvider.notifier).flush();
     } on Object {
       // The regular draft saver displays the recoverable persistence error.
     }
@@ -163,11 +165,56 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     ref.read(conversionResultProvider.notifier).convert();
   }
 
+  String get _songTitle => _songTitleController.text.trim();
+
+  void _setSongTitle(String value) {
+    if (_songTitleController.text != value) {
+      _songTitleController.value = TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: value.length),
+      );
+    }
+    ref.read(songTitleProvider.notifier).replace(value);
+  }
+
+  void _focusPrimaryEditor(String _) {
+    if (ref.read(editorModeProvider) == ConverterEditorMode.grid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _gridEditorKey.currentState?.focusCell(0, 0);
+      });
+      return;
+    }
+    FocusScope.of(context).requestFocus(_scoreFocusNode);
+  }
+
+  bool _hasUnsavedSongChanges(SongRecord? savedSong) {
+    final mode = ref.read(editorModeProvider);
+    final grid = ref.read(smartGridDocumentProvider);
+    final input = mode == ConverterEditorMode.grid
+        ? const SmartGridCodec().exportInput(grid)
+        : ConverterInput(
+            scoreText: _scoreController.text,
+            lyricsText: _lyricsController.text,
+          );
+    if (savedSong == null) {
+      return _songTitle.isNotEmpty ||
+          input.scoreText.trim().isNotEmpty ||
+          input.lyricsText.trim().isNotEmpty ||
+          !grid.isEmpty;
+    }
+    return _songTitle != savedSong.title ||
+        input != savedSong.input ||
+        mode.name != savedSong.editorMode ||
+        !_sameSongGridContent(grid, savedSong.gridDocument);
+  }
+
   Future<void> _clear() async {
     final hasGridInput = !ref.read(smartGridDocumentProvider).isEmpty;
     if (_scoreController.text.isNotEmpty ||
         _lyricsController.text.isNotEmpty ||
-        hasGridInput) {
+        hasGridInput ||
+        _songTitle.isNotEmpty ||
+        ref.read(currentSongIdProvider) != null) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -187,8 +234,11 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     }
     final previous = ref.read(converterInputProvider.notifier).clear();
     final previousGrid = ref.read(smartGridDocumentProvider);
+    final previousSongId = ref.read(currentSongIdProvider);
+    final previousTitle = _songTitleController.text;
     ref.read(smartGridDocumentProvider.notifier).clear();
     ref.read(currentSongIdProvider.notifier).set(null);
+    _setSongTitle('');
     setState(() {
       _gridConversion = null;
       _gridConversionDocument = null;
@@ -204,6 +254,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
           action: SnackBarAction(
             label: '撤销',
             onPressed: () {
+              ref.read(currentSongIdProvider.notifier).set(previousSongId);
+              _setSongTitle(previousTitle);
               ref.read(converterInputProvider.notifier).restore(previous);
               ref
                   .read(smartGridDocumentProvider.notifier)
@@ -216,16 +268,41 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
   }
 
   Future<void> _openLibrary() async {
-    final action = await Navigator.of(context).push<SongLoadRequest>(
-      MaterialPageRoute(
+    final action = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute<Object?>(
           builder: (_) =>
               SongLibraryPage(currentSongId: ref.read(currentSongIdProvider))),
     );
     if (action == null || !mounted) return;
-    final current = ref.read(converterInputProvider);
-    if ((current.scoreText.isNotEmpty || current.lyricsText.isNotEmpty) &&
-        (current.scoreText != action.song.input.scoreText ||
-            current.lyricsText != action.song.input.lyricsText)) {
+    if (action is DraftRecoveryRequest) {
+      final draft = action.draft;
+      ref.read(currentSongIdProvider.notifier).set(draft.songId);
+      ref.read(songTitleProvider.notifier).replace(draft.songTitle);
+      _songTitleController.text = draft.songTitle;
+      ref.read(smartGridDocumentProvider.notifier).replaceWithoutInput(
+            draft.gridDocument ?? SmartGridDocument.empty(),
+          );
+      ref.read(editorModeProvider.notifier).set(
+            draft.editorMode == 'grid'
+                ? ConverterEditorMode.grid
+                : ConverterEditorMode.text,
+          );
+      ref.read(converterInputProvider.notifier).restore(draft.input);
+      _syncControllers(draft.input);
+      setState(() {
+        _gridConversion = null;
+        _gridConversionDocument = null;
+      });
+      _showMessage('草稿已恢复，可以继续编辑');
+      return;
+    }
+    if (action is! SongLoadRequest) return;
+    final currentSongId = ref.read(currentSongIdProvider);
+    final currentSong = currentSongId == null
+        ? null
+        : _songById(ref.read(songLibraryProvider), currentSongId);
+    if (_hasUnsavedSongChanges(currentSong) &&
+        action.song.id != currentSong?.id) {
       final accepted = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -241,7 +318,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                   ]));
       if (accepted != true || !mounted) return;
     }
-    ref.read(converterInputProvider.notifier).restore(action.song.input);
+    ref.read(currentSongIdProvider.notifier).set(action.song.id);
+    _setSongTitle(action.song.title);
     if (action.song.gridDocument != null) {
       ref
           .read(smartGridDocumentProvider.notifier)
@@ -260,7 +338,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
       }
       ref.read(editorModeProvider.notifier).set(ConverterEditorMode.text);
     }
-    ref.read(currentSongIdProvider.notifier).set(action.song.id);
+    ref.read(converterInputProvider.notifier).restore(action.song.input);
     setState(() {
       _gridConversion = null;
       _gridConversionDocument = null;
@@ -279,9 +357,22 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
             lyricsText: _lyricsController.text,
           );
     final library = ref.read(songLibraryProvider);
-    final linkedId = forceCopy ? null : ref.read(currentSongIdProvider);
-    final existing = linkedId == null ? null : _songById(library, linkedId);
-    final fields = await _showSongDialog(existing);
+    final linkedId = ref.read(currentSongIdProvider);
+    final source = linkedId == null ? null : _songById(library, linkedId);
+    final existing = forceCopy ? null : source;
+    final requiresTitle = _songTitle.isEmpty || forceCopy;
+    final defaultTitle =
+        forceCopy && _songTitle.isNotEmpty ? '$_songTitle - 副本' : _songTitle;
+    final fields = await _showSongDialog(
+      source: source,
+      title: defaultTitle,
+      includeTitle: requiresTitle,
+      dialogTitle: forceCopy
+          ? '另存为'
+          : existing == null
+              ? '保存到曲谱库'
+              : '保存修改',
+    );
     if (fields == null || !mounted) return;
     final now = DateTime.now().toUtc();
     final result = ref.read(conversionResultProvider);
@@ -310,111 +401,34 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     try {
       await ref.read(songLibraryProvider.notifier).saveRecord(record);
       ref.read(currentSongIdProvider.notifier).set(id);
-      await ref.read(converterDraftPersistenceProvider).save(
-            input,
-            songId: id,
-            gridDocument: ref.read(smartGridDocumentProvider),
-            editorMode: mode.name,
-          );
+      _setSongTitle(fields.title);
+      await ref.read(converterInputProvider.notifier).flush();
       if (mounted) _showMessage(snapshot == null ? '已保存输入草稿' : '已保存曲谱和转换结果');
     } on Object {
       if (mounted) _showMessage('保存到曲谱库失败，请重试');
     }
   }
 
-  Future<_SongFields?> _showSongDialog(SongRecord? existing) async {
-    final title = TextEditingController(text: existing?.title ?? '');
-    final artist = TextEditingController(text: existing?.artist ?? '');
-    final notes = TextEditingController(text: existing?.notes ?? '');
-    final tags = <String>[...?existing?.tags];
-    final tagInput = TextEditingController();
+  Future<_SongFields?> _showSongDialog({
+    required SongRecord? source,
+    required String title,
+    required bool includeTitle,
+    required String dialogTitle,
+  }) async {
     final suggestions = {
       for (final song in ref.read(songLibraryProvider)) ...song.tags
     }.toList()
       ..sort();
-    try {
-      return await showDialog<_SongFields>(
-          context: context,
-          builder: (context) => StatefulBuilder(
-              builder: (context, setDialogState) => AlertDialog(
-                    title: Text(existing == null ? '保存到曲谱库' : '保存修改'),
-                    content: SizedBox(
-                        width: 420,
-                        child: SingleChildScrollView(
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                              TextField(
-                                  controller: title,
-                                  autofocus: true,
-                                  decoration: const InputDecoration(
-                                      labelText: '歌曲名 *')),
-                              TextField(
-                                  controller: artist,
-                                  decoration:
-                                      const InputDecoration(labelText: '歌手')),
-                              TextField(
-                                  controller: tagInput,
-                                  decoration: const InputDecoration(
-                                      labelText: '标签（输入后按回车）'),
-                                  onSubmitted: (value) {
-                                    final tag = value.trim();
-                                    if (tag.isNotEmpty && !tags.contains(tag)) {
-                                      setDialogState(() => tags.add(tag));
-                                    }
-                                    tagInput.clear();
-                                  }),
-                              if (tags.isNotEmpty)
-                                Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Wrap(spacing: 4, children: [
-                                      for (final tag in tags)
-                                        InputChip(
-                                            label: Text(tag),
-                                            onDeleted: () => setDialogState(
-                                                () => tags.remove(tag)))
-                                    ])),
-                              if (suggestions.isNotEmpty)
-                                Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Wrap(spacing: 4, children: [
-                                      for (final tag in suggestions
-                                          .where((tag) => !tags.contains(tag)))
-                                        ActionChip(
-                                            label: Text(tag),
-                                            onPressed: () => setDialogState(
-                                                () => tags.add(tag)))
-                                    ])),
-                              TextField(
-                                  controller: notes,
-                                  maxLines: 3,
-                                  decoration:
-                                      const InputDecoration(labelText: '备注')),
-                            ]))),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('取消')),
-                      FilledButton(
-                          onPressed: () {
-                            if (title.text.trim().isEmpty) return;
-                            Navigator.pop(
-                                context,
-                                _SongFields(
-                                    title.text.trim(),
-                                    artist.text.trim(),
-                                    List.unmodifiable(tags),
-                                    notes.text.trim()));
-                          },
-                          child: const Text('保存'))
-                    ],
-                  )));
-    } finally {
-      title.dispose();
-      artist.dispose();
-      notes.dispose();
-      tagInput.dispose();
-    }
+    return showDialog<_SongFields>(
+      context: context,
+      builder: (context) => _SongDialog(
+        source: source,
+        title: title,
+        includeTitle: includeTitle,
+        dialogTitle: dialogTitle,
+        suggestions: suggestions,
+      ),
+    );
   }
 
   Future<void> _switchEditorMode(ConverterEditorMode nextMode) async {
@@ -515,7 +529,10 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: SingleChildScrollView(
-                  child: SelectableText(input.scoreText),
+                  child: SelectableText(
+                    input.scoreText,
+                    style: AppTypography.of(context).notationBody,
+                  ),
                 ),
               ),
             ],
@@ -574,27 +591,6 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
   void _updateGrid(SmartGridDocument document) {
     ref.read(smartGridDocumentProvider.notifier).update(document);
     setState(() {});
-  }
-
-  List<SmartGridIssue> _liveGridIssues(SmartGridDocument document) {
-    final issues = <SmartGridIssue>[];
-    for (var row = 0; row < document.rows.length; row++) {
-      for (var column = 0; column < document.columnCount; column++) {
-        final message = validateSmartGridCell(
-          document.rows[row].type,
-          document.rows[row].cells[column],
-        );
-        if (message != null) {
-          issues.add(SmartGridIssue(
-            row: row,
-            column: column,
-            severity: SmartGridIssueSeverity.error,
-            message: message,
-          ));
-        }
-      }
-    }
-    return issues;
   }
 
   Future<void> _showExamples() async {
@@ -695,8 +691,11 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
       if (data == null) throw StateError('无法生成图片');
-      final savedPath =
-          await const PngExportService().export(data.buffer.asUint8List());
+      final savedPath = await const PngExportService().export(
+        data.buffer.asUint8List(),
+        songTitle: _songTitle,
+        imageType: '字母简谱',
+      );
       if (!mounted) return;
       _showMessage(savedPath == null ? '已取消导出' : '图片已保存');
     } on Object {
@@ -719,8 +718,13 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
       final bytes = await const SmartGridInspectionRenderer().render(
         document,
         conversion,
+        songTitle: _songTitle,
       );
-      final savedPath = await const PngExportService().export(bytes);
+      final savedPath = await const PngExportService().export(
+        bytes,
+        songTitle: _songTitle,
+        imageType: '检查图',
+      );
       if (mounted) {
         _showMessage(savedPath == null ? '已取消导出' : '检查图已保存');
       }
@@ -735,11 +739,13 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     String value, {
     bool imageMode = false,
     double? width,
+    String songTitle = '',
   }) {
+    final typography = AppTypography.of(context);
     final contents = SelectableText(
       key: imageMode ? null : const Key('output-text'),
       value,
-      style: _outputTextStyle,
+      style: typography.notationBody,
     );
     return RepaintBoundary(
       key: _outputImageKey,
@@ -754,7 +760,22 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
           borderRadius: BorderRadius.circular(8),
         ),
         child: imageMode
-            ? contents
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (songTitle.trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        songTitle.trim(),
+                        textAlign: TextAlign.center,
+                        style: typography.songTitle,
+                      ),
+                    ),
+                  contents,
+                ],
+              )
             : SingleChildScrollView(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -784,7 +805,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
       _showMessage('没有可复制的内容');
       return;
     }
-    await Clipboard.setData(ClipboardData(text: output));
+    await Clipboard.setData(
+      ClipboardData(text: formatSongOutput(_songTitle, output)),
+    );
     if (!mounted) {
       return;
     }
@@ -812,7 +835,12 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     final currentSong = currentSongId == null
         ? null
         : _songById(ref.watch(songLibraryProvider), currentSongId);
+    final songTitle = ref.watch(songTitleProvider);
+    final tableScale = ref.watch(tableScaleProvider);
+    final hasUnsavedSongChanges = _hasUnsavedSongChanges(currentSong);
     final draftMessage = ref.watch(draftPersistenceMessageProvider);
+    final draftHealth = ref.watch(draftStorageHealthProvider);
+    final draftWriteState = ref.watch(draftWriteStateProvider);
     final output = displayedResult?.output ?? '';
     final imageOutput = switch (displayedResult?.score) {
       final score? => const ShareImageTextRenderer().render(score),
@@ -840,6 +868,8 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
             },
             icon: const Icon(Icons.keyboard),
           ),
+          const ThemeToggleButton(),
+          const WindowPinToggleButton(),
         ],
       ),
       body: SafeArea(
@@ -849,21 +879,120 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (draftHealth.blocksWrites) ...[
+                  MaterialBanner(
+                    content: Text(draftHealth.message ?? '草稿需要恢复。'),
+                    actions: [
+                      TextButton(
+                        onPressed: () async {
+                          final result =
+                              await Navigator.of(context).push<Object?>(
+                            MaterialPageRoute<Object?>(
+                              builder: (_) => const RecoveryCenterPage(),
+                            ),
+                          );
+                          if (result is DraftRecoveryRequest && mounted) {
+                            final draft = result.draft;
+                            ref
+                                .read(currentSongIdProvider.notifier)
+                                .set(draft.songId);
+                            ref
+                                .read(songTitleProvider.notifier)
+                                .replace(draft.songTitle);
+                            _songTitleController.text = draft.songTitle;
+                            ref
+                                .read(smartGridDocumentProvider.notifier)
+                                .replaceWithoutInput(
+                                  draft.gridDocument ??
+                                      SmartGridDocument.empty(),
+                                );
+                            ref.read(editorModeProvider.notifier).set(
+                                  draft.editorMode == 'grid'
+                                      ? ConverterEditorMode.grid
+                                      : ConverterEditorMode.text,
+                                );
+                            ref
+                                .read(converterInputProvider.notifier)
+                                .restore(draft.input);
+                            _syncControllers(draft.input);
+                          }
+                        },
+                        child: const Text('打开恢复中心'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (draftMessage != null) ...[
-                  Text(draftMessage,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    draftMessage,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                  ),
                   const SizedBox(height: 12),
                 ],
                 if (mappingMessage != null) ...[
                   Text(
                     mappingMessage,
                     key: const Key('mapping-persistence-message'),
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                   ),
                   const SizedBox(height: 12),
                 ],
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: TextField(
+                      key: const Key('song-title-input'),
+                      controller: _songTitleController,
+                      maxLength: 80,
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: _focusPrimaryEditor,
+                      decoration: const InputDecoration(
+                        labelText: '歌曲名',
+                        hintText: '输入歌曲名',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) =>
+                          ref.read(songTitleProvider.notifier).update(value),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    switch (draftWriteState.phase) {
+                      PersistenceWritePhase.saving => '草稿保存中…',
+                      PersistenceWritePhase.saved => '草稿已保存',
+                      PersistenceWritePhase.failed => '草稿保存失败，可点击重试',
+                      PersistenceWritePhase.idle => '',
+                    },
+                    key: const Key('draft-save-status'),
+                  ),
+                ),
+                if (draftWriteState.phase == PersistenceWritePhase.failed)
+                  Center(
+                    child: TextButton(
+                      onPressed: () =>
+                          ref.read(converterInputProvider.notifier).retry(),
+                      child: const Text('重试保存'),
+                    ),
+                  ),
+                if (hasUnsavedSongChanges)
+                  const Align(
+                    alignment: Alignment.center,
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Chip(
+                        avatar: Icon(Icons.edit_note, size: 18),
+                        label: Text('待保存到曲谱库'),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: SegmentedButton<ConverterEditorMode>(
@@ -886,13 +1015,15 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (editorMode == ConverterEditorMode.grid)
+                if (editorMode == ConverterEditorMode.grid) ...[
+                  const GlobalTableScaleControl(),
+                  const SizedBox(height: 8),
                   SmartGridEditor(
                     key: _gridEditorKey,
                     document: gridDocument,
                     issues: result != null && _gridConversion != null
                         ? _gridConversion!.issues
-                        : _liveGridIssues(gridDocument),
+                        : validateSmartGridDocument(gridDocument),
                     onChanged: _updateGrid,
                     onViewStateChanged: (document) => ref
                         .read(smartGridDocumentProvider.notifier)
@@ -900,8 +1031,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                     panelSize: _panelSize('smart-grid'),
                     onPanelSizeChanged: (size) =>
                         _updatePanelSize('smart-grid', size),
-                  )
-                else ...[
+                    scale: tableScale,
+                  ),
+                ] else ...[
                   ResizablePanel(
                     panelId: 'score-input',
                     size: _panelSize('score-input'),
@@ -911,10 +1043,12 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                     child: TextField(
                       key: const Key('score-input'),
                       controller: _scoreController,
+                      focusNode: _scoreFocusNode,
                       inputFormatters: const [SemicolonLineBreakFormatter()],
                       expands: true,
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
+                      style: AppTypography.of(context).notationBody,
                       decoration: const InputDecoration(
                         labelText: '数字简谱',
                         alignLabelWithHint: true,
@@ -942,6 +1076,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                       expands: true,
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
+                      style: AppTypography.of(context).notationBody,
                       decoration: const InputDecoration(
                         labelText: '歌词（可选）',
                         alignLabelWithHint: true,
@@ -1052,10 +1187,12 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                         const SizedBox(width: 6),
                         Text(
                           '结果待更新',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.tertiary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.tertiary,
+                              ),
                         ),
                       ]),
                     ),
@@ -1069,6 +1206,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                       panelSize: _panelSize('letter-grid'),
                       onPanelSizeChanged: (size) =>
                           _updatePanelSize('letter-grid', size),
+                      scale: tableScale,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1089,6 +1227,7 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                             imageOutput.isEmpty ? '转换结果将显示在这里' : imageOutput,
                             imageMode: true,
                             width: 1200,
+                            songTitle: songTitle,
                           ),
                         )
                       : _outputPanel(
@@ -1103,8 +1242,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                       child: Text(
                         error.message,
                         key: const Key('error-text'),
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.error),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                       ),
                     ),
                   ),
@@ -1127,9 +1267,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                       child: Text(
                         warning.message,
                         key: const Key('warning-text'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.tertiary,
-                        ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.tertiary,
+                            ),
                       ),
                     ),
                   ),
@@ -1140,9 +1280,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                   Text(
                     '未匹配歌词：${_formatUnmatchedLyrics(displayedResult.unmatchedLyricTokens)}',
                     key: const Key('unmatched-lyrics-text'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.tertiary,
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.tertiary,
+                        ),
                   ),
                 ],
                 if (displayedResult != null &&
@@ -1151,9 +1291,9 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
                   Text(
                     '缺少歌词的位置：${_formatMissingLyricNotes(displayedResult.missingLyricNotePositions)}',
                     key: const Key('missing-lyrics-position-text'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.tertiary,
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.tertiary,
+                        ),
                   ),
                 ],
               ],
@@ -1164,13 +1304,6 @@ class _ConverterPageState extends ConsumerState<ConverterPage>
     );
   }
 }
-
-const _outputTextStyle = TextStyle(
-  fontFamily: 'NSimSun',
-  fontFamilyFallback: ['SimSun', 'MS Gothic', 'Consolas', 'monospace'],
-  fontSize: 16,
-  height: 1.5,
-);
 
 class _ExampleSelection {
   final ConverterExample example;
@@ -1187,11 +1320,191 @@ class _SongFields {
   const _SongFields(this.title, this.artist, this.tags, this.notes);
 }
 
+class _SongDialog extends StatefulWidget {
+  final SongRecord? source;
+  final String title;
+  final bool includeTitle;
+  final String dialogTitle;
+  final List<String> suggestions;
+
+  const _SongDialog({
+    required this.source,
+    required this.title,
+    required this.includeTitle,
+    required this.dialogTitle,
+    required this.suggestions,
+  });
+
+  @override
+  State<_SongDialog> createState() => _SongDialogState();
+}
+
+class _SongDialogState extends State<_SongDialog> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _artistController;
+  late final TextEditingController _notesController;
+  final _tagInputController = TextEditingController();
+  late final List<String> _tags;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.title);
+    _artistController =
+        TextEditingController(text: widget.source?.artist ?? '');
+    _notesController = TextEditingController(text: widget.source?.notes ?? '');
+    _tags = <String>[...?widget.source?.tags];
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _artistController.dispose();
+    _notesController.dispose();
+    _tagInputController.dispose();
+    super.dispose();
+  }
+
+  void _addTag(String value) {
+    final tag = value.trim();
+    if (tag.isNotEmpty && !_tags.contains(tag)) {
+      setState(() => _tags.add(tag));
+    }
+    _tagInputController.clear();
+  }
+
+  void _save() {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    Navigator.pop(
+      context,
+      _SongFields(
+        title,
+        _artistController.text.trim(),
+        List.unmodifiable(_tags),
+        _notesController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.dialogTitle),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.includeTitle)
+                  TextField(
+                    controller: _titleController,
+                    autofocus: true,
+                    maxLength: 80,
+                    decoration: const InputDecoration(labelText: '歌曲名 *'),
+                  ),
+                TextField(
+                  controller: _artistController,
+                  autofocus: !widget.includeTitle,
+                  decoration: const InputDecoration(labelText: '歌手'),
+                ),
+                TextField(
+                  controller: _tagInputController,
+                  decoration: const InputDecoration(labelText: '标签（输入后按回车）'),
+                  onSubmitted: _addTag,
+                ),
+                if (_tags.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 4,
+                      children: [
+                        for (final tag in _tags)
+                          InputChip(
+                            label: Text(tag),
+                            onDeleted: () => setState(() => _tags.remove(tag)),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (widget.suggestions.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 4,
+                      children: [
+                        for (final tag in widget.suggestions
+                            .where((tag) => !_tags.contains(tag)))
+                          ActionChip(
+                            label: Text(tag),
+                            onPressed: () => setState(() => _tags.add(tag)),
+                          ),
+                      ],
+                    ),
+                  ),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '备注'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const Key('song-dialog-save'),
+            onPressed: _save,
+            child: const Text('保存'),
+          ),
+        ],
+      );
+}
+
 SongRecord? _songById(List<SongRecord> songs, String id) {
   for (final song in songs) {
     if (song.id == id) return song;
   }
   return null;
+}
+
+bool _sameSongGridContent(
+  SmartGridDocument current,
+  SmartGridDocument? saved,
+) {
+  if (current.isEmpty && (saved == null || saved.isEmpty)) return true;
+  if (saved == null ||
+      current.columnCount != saved.columnCount ||
+      current.rows.length != saved.rows.length) {
+    return false;
+  }
+  final currentGroups = _gridGroupPositions(current);
+  final savedGroups = _gridGroupPositions(saved);
+  for (var index = 0; index < current.rows.length; index++) {
+    final currentRow = current.rows[index];
+    final savedRow = saved.rows[index];
+    if (currentRow.type != savedRow.type ||
+        currentRow.cells.length != savedRow.cells.length ||
+        currentGroups[index] != savedGroups[index]) {
+      return false;
+    }
+    for (var column = 0; column < currentRow.cells.length; column++) {
+      if (currentRow.cells[column] != savedRow.cells[column]) return false;
+    }
+  }
+  return true;
+}
+
+List<int> _gridGroupPositions(SmartGridDocument document) {
+  final firstRows = <String, int>{};
+  return [
+    for (var index = 0; index < document.rows.length; index++)
+      firstRows.putIfAbsent(document.rows[index].groupId, () => index),
+  ];
 }
 
 String _formatUnmatchedLyrics(List<LyricToken> tokens) => tokens

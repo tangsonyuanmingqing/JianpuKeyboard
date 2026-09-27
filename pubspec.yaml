@@ -1,7 +1,7 @@
 name: jianpu_keyboard
 description: 数字简谱键盘字母转换器
 publish_to: "none"
-version: 1.5.0
+version: 1.6.0
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^2.6.1
   file_selector: 1.0.3
+  path_provider: ^2.1.5
   shared_preferences: ^2.3.1
 
 dev_dependencies:
@@ -22,3 +23,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/OFL-1.1.txt
+  fonts:
+    - family: NotoSansCJKSC
+      fonts:
+        - asset: assets/fonts/NotoSansCJKsc-VF.ttf
+    - family: NotoSansMonoCJKSC
+      fonts:
+        - asset: assets/fonts/NotoSansMonoCJKsc-VF.ttf

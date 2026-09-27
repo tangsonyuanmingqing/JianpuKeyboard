@@ -10,31 +10,31 @@ void main() {
 
   test('converts middle-register degrees 3 4 5 6 7', () {
     final result = converter.convert(scoreText: '3 4 5 6 7');
-    expect(result.output, 'D F G H J');
+    expect(result.output, 'Ｄ Ｆ Ｇ Ｈ Ｊ');
     expect(result.errors, isEmpty);
   });
 
   test('converts high-register notes', () {
     final result = converter.convert(scoreText: "1' 2' 3' 4' 5' 6' 7'");
-    expect(result.output, 'Q W E R T Y U');
+    expect(result.output, 'Ｑ Ｗ Ｅ Ｒ Ｔ Ｙ Ｕ');
   });
 
   test('converts low-register notes', () {
     final result = converter.convert(scoreText: '1, 2, 3, 4, 5, 6, 7,');
-    expect(result.output, 'Z X C V B N M');
+    expect(result.output, 'Ｚ Ｘ Ｃ Ｖ Ｂ Ｎ Ｍ');
   });
 
   test('converts mixed registers', () {
     final result = converter.convert(
       scoreText: "1, 2, 3, 1 2 3 4 5 6 7 1' 2' 3'",
     );
-    expect(result.output, 'Z X C A S D F G H J Q W E');
+    expect(result.output, 'Ｚ Ｘ Ｃ Ａ Ｓ Ｄ Ｆ Ｇ Ｈ Ｊ Ｑ Ｗ Ｅ');
   });
 
   test('does not treat a middle-register 3 as low after a low-register note',
       () {
     final result = converter.convert(scoreText: "1, 2, 3 4 5 6 7 1' 2' 3'");
-    expect(result.output, 'Z X D F G H J Q W E');
+    expect(result.output, 'Ｚ Ｘ Ｄ Ｆ Ｇ Ｈ Ｊ Ｑ Ｗ Ｅ');
   });
 
   test('converts mixed low, middle and high registers from each token', () {
@@ -43,7 +43,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'Z X C A S D Q W E');
+    expect(result.output, 'Ｚ Ｘ Ｃ Ａ Ｓ Ｄ Ｑ Ｗ Ｅ');
 
     final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
     expect(notes, hasLength(9));
@@ -93,17 +93,17 @@ void main() {
 
   test('preserves measure bars', () {
     final result = converter.convert(scoreText: '3 4 5 | 6 7');
-    expect(result.output, 'D F G | H J');
+    expect(result.output, 'Ｄ Ｆ Ｇ | Ｈ Ｊ');
   });
 
   test('preserves rests without mapping them', () {
     final result = converter.convert(scoreText: '3 0 4');
-    expect(result.output, 'D 0 F');
+    expect(result.output, 'Ｄ    Ｆ');
   });
 
   test('preserves holds without mapping them', () {
     final result = converter.convert(scoreText: '7 - -');
-    expect(result.output, 'J - -');
+    expect(result.output, 'Ｊ - -');
   });
 
   test('aligns lyrics to notes in standard format', () {
@@ -115,7 +115,7 @@ void main() {
 我 爱 你
 ''';
     final result = converter.convert(scoreText: document);
-    expect(result.output, 'D  F  G\n我 爱 你');
+    expect(result.output, 'Ｄ Ｆ Ｇ\n我 爱 你');
     expect(result.errors, isEmpty);
   });
 
@@ -124,7 +124,7 @@ void main() {
       scoreText: '[谱]\n3 4 5',
       lyricsText: '我 爱 你',
     );
-    expect(result.output, 'D  F  G\n我 爱 你');
+    expect(result.output, 'Ｄ Ｆ Ｇ\n我 爱 你');
   });
 
   test('does not consume lyrics for holds', () {
@@ -136,7 +136,7 @@ void main() {
 我
 ''';
     final result = converter.convert(scoreText: document);
-    expect(result.output, 'D  - -\n我');
+    expect(result.output, 'Ｄ - -\n我');
   });
 
   test('does not consume lyrics for rests', () {
@@ -144,7 +144,7 @@ void main() {
       scoreText: '3 0 4',
       lyricsText: '我 爱',
     );
-    expect(result.output, 'D  0 F\n我   爱');
+    expect(result.output, 'Ｄ    Ｆ\n我    爱');
   });
 
   test('does not fail when lyrics are missing', () {
@@ -159,7 +159,7 @@ void main() {
       ScoreValidator.missingLyricsMessage,
     );
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D  F G\n我');
+    expect(result.output, 'Ｄ Ｆ Ｇ\n我');
   });
 
   test('warns but still converts when lyrics are extra', () {
@@ -174,7 +174,7 @@ void main() {
       ScoreValidator.extraLyricsMessage,
     );
     expect(result.unmatchedLyrics, ['你']);
-    expect(result.output, 'D  F\n我 爱');
+    expect(result.output, 'Ｄ Ｆ\n我 爱');
   });
 
   test('returns a locatable error for illegal tokens', () {
@@ -199,9 +199,9 @@ void main() {
     final result = converter.convert(scoreText: document);
     expect(
       result.output,
-      'D  D  D  F  G  | D  S  S  -\n'
+      'Ｄ Ｄ Ｄ Ｆ Ｇ | Ｄ Ｓ Ｓ -\n'
       '黑 黑 的 天 空 | 低 垂 亮\n'
-      'A  A  A  S  D  | D  J J -\n'
+      'Ａ Ａ Ａ Ｓ Ｄ | Ｄ Ｊ Ｊ -\n'
       '亮 的 繁 星 相 | 随',
     );
   });
@@ -222,9 +222,9 @@ void main() {
     expect(result.unmatchedLyrics, isEmpty);
     expect(
       result.output,
-      'D  D  D  F  G  | D  S  S -\n'
+      'Ｄ Ｄ Ｄ Ｆ Ｇ | Ｄ Ｓ Ｓ -\n'
       '黑 黑 的 天 空 | 低 垂 -\n'
-      'A  A  A  S  D  | D  J  J -\n'
+      'Ａ Ａ Ａ Ｓ Ｄ | Ｄ Ｊ Ｊ -\n'
       '亮 亮 的 繁 星 | 相 随 -',
     );
 
@@ -268,7 +268,7 @@ void main() {
     expect(result.errors, isEmpty);
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D  S  S -\n低 垂 -');
+    expect(result.output, 'Ｄ Ｓ Ｓ -\n低 垂 -');
 
     final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
     expect(notes.map((note) => note.lyric), ['低', '垂', '垂']);
@@ -285,7 +285,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D  F\n我');
+    expect(result.output, 'Ｄ Ｆ\n我');
     expect(
       result.warnings.map((warning) => warning.message),
       contains(ScoreValidator.ignoredLeadingContinuationMessage),
@@ -305,7 +305,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D  F\n我');
+    expect(result.output, 'Ｄ Ｆ\n我');
     expect(
       result.warnings.map((warning) => warning.message),
       contains(ScoreValidator.ignoredLeadingContinuationMessage),
@@ -321,7 +321,7 @@ void main() {
       scoreText: '3 4 5',
       lyricsText: '我爱你',
     );
-    expect(result.output, 'D  F  G\n我 爱 你');
+    expect(result.output, 'Ｄ Ｆ Ｇ\n我 爱 你');
   });
 
   test('does not warn when global lyric count matches notes', () {
@@ -331,7 +331,7 @@ void main() {
     );
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D  F\n我 爱\nG  H\n你 好');
+    expect(result.output, 'Ｄ Ｆ\n我 爱\nＧ Ｈ\n你 好');
   });
 
   test('warns and leaves unmatched notes empty when lyrics are short', () {
@@ -353,7 +353,7 @@ void main() {
     expect(result.errors, isEmpty);
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D F G');
+    expect(result.output, 'Ｄ Ｆ Ｇ');
     expect(
       result.score!.lines.single.tokens
           .whereType<Note>()
@@ -370,7 +370,7 @@ void main() {
     expect(result.errors, isEmpty);
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D F G');
+    expect(result.output, 'Ｄ Ｆ Ｇ');
     expect(
       result.score!.lines.single.tokens
           .whereType<Note>()
@@ -398,7 +398,7 @@ void main() {
     );
     expect(result.warnings, isEmpty);
     expect(result.unmatchedLyrics, isEmpty);
-    expect(result.output, 'D  F  G\n我 爱 你');
+    expect(result.output, 'Ｄ Ｆ Ｇ\n我 爱 你');
   });
 
   test('keeps extra lyrics out of rendered text', () {
@@ -408,7 +408,7 @@ void main() {
     );
     expect(result.warnings.single.message, ScoreValidator.extraLyricsMessage);
     expect(result.unmatchedLyrics, ['好', '吗']);
-    expect(result.output, 'D  F  G\n我 爱 你');
+    expect(result.output, 'Ｄ Ｆ Ｇ\n我 爱 你');
   });
 
   test('exposes aligned score, warnings and unmatched lyrics', () {
@@ -418,7 +418,7 @@ void main() {
     );
 
     expect(result.errors, isEmpty);
-    expect(result.output, 'D  F\n我 爱\nG  H\n你 好');
+    expect(result.output, 'Ｄ Ｆ\n我 爱\nＧ Ｈ\n你 好');
     expect(
       result.warnings.single.message,
       ScoreValidator.extraLyricsMessage,
@@ -485,8 +485,19 @@ void main() {
     );
     expect(beforeNotes.map((note) => note.keyboardKey), ['D', 'S', 'G']);
     expect(afterNotes.map((note) => note.keyboardKey), ['E', 'S', 'G']);
-    expect(after.output.contains('0'), isTrue);
+    expect(after.output.contains('0'), isFalse);
     expect(after.output.contains('-'), isTrue);
     expect(after.output.contains('|'), isTrue);
+  });
+
+  test('aligns numeric lyrics as ordinary lyric words', () {
+    final result = converter.convert(
+      scoreText: '1 2',
+      lyricsText: '520 次',
+    );
+
+    expect(result.errors, isEmpty);
+    final notes = result.score!.lines.single.tokens.whereType<Note>().toList();
+    expect(notes.map((note) => note.lyric), ['520', '次']);
   });
 }

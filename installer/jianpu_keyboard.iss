@@ -1,5 +1,5 @@
 #define MyAppName "Jianpu Keyboard"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.6.0"
 #define MyAppPublisher "tangsonyuanmingqing"
 #define MyAppExeName "jianpu_keyboard.exe"
 
@@ -14,7 +14,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
-OutputBaseFilename=Jianpu-Keyboard-Setup-{#MyAppVersion}-x64
+OutputBaseFilename=JianpuKeyboard-v{#MyAppVersion}-windows-setup
 Compression=lzma
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -28,7 +28,9 @@ Name: "startmenuicon"; Description: "创建开始菜单快捷方式"; Flags: unc
 Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked
 
 [Files]
-Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "licenses\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\LICENSE"; DestDir: "{app}\licenses"; DestName: "JianpuKeyboard-LICENSE.txt"; Flags: ignoreversion
+Source: "..\assets\fonts\OFL-1.1.txt"; DestDir: "{app}\licenses"; DestName: "NotoSansCJK-OFL-1.1.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon

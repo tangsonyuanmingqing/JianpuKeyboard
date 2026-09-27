@@ -33,3 +33,36 @@ String padToDisplayWidth(String text, int width) {
   }
   return '$text${' ' * extra}';
 }
+
+/// Converts ASCII keyboard letters into their fullwidth counterparts.
+///
+/// A fullwidth Latin letter occupies the same two display cells as one CJK
+/// lyric character, which lets the plain-text score centre both contents on
+/// the same column axis.
+String toFullwidthKeyboardLetters(String text) {
+  return String.fromCharCodes(text.runes.map((rune) {
+    if (rune >= 0x41 && rune <= 0x5A) return rune + 0xFEE0;
+    return rune;
+  }));
+}
+
+/// Centres [text] inside [width] display cells.
+///
+/// When one spare display cell cannot be split evenly, it is kept on the
+/// right, leaving the text half a cell to the left as documented by the UI.
+String centerToDisplayWidth(String text, int width) {
+  final extra = width - displayWidth(text);
+  if (extra <= 0) return text;
+  final left = extra ~/ 2;
+  return '${' ' * left}$text${' ' * (extra - left)}';
+}
+
+/// Renders cells with their display-width centres aligned and drops only
+/// trailing whitespace that has no following column to position.
+String renderCenteredDisplayRow(List<String> texts, List<int> widths) {
+  assert(texts.length == widths.length);
+  return [
+    for (var index = 0; index < texts.length; index++)
+      centerToDisplayWidth(texts[index], widths[index]),
+  ].join(' ').trimRight();
+}

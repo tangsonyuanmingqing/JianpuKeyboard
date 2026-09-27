@@ -1,5 +1,9 @@
 import 'converter_input.dart';
 import 'smart_grid_document.dart';
+import 'smart_grid_lyric_tokens.dart';
+import 'smart_grid_validation.dart';
+
+export 'smart_grid_validation.dart' show validateSmartGridCell;
 
 class SmartGridImportResult {
   final SmartGridDocument? document;
@@ -64,28 +68,6 @@ class SmartGridCodec {
     }
     return ConverterInput(scoreText: lines.join('\n'));
   }
-}
-
-String? validateSmartGridCell(SmartGridRowType type, String value) {
-  if (value.isEmpty || value == '//' || value == '|' || value == '-') {
-    return null;
-  }
-  if (value == ';') return '表格中换行由行决定，不能输入英文分号。';
-  if (value.contains(RegExp(r'\s'))) return '一个格子只能填写一个汉字、单词或符号。';
-  if (type == SmartGridRowType.lyrics &&
-      value.contains(RegExp(r'[\u3400-\u9fff]')) &&
-      value.runes.length != 1) {
-    return '一个歌词格只能填写一个汉字；多个汉字请分到相邻格子。';
-  }
-  if (type == SmartGridRowType.score &&
-      !RegExp(r"^(?:[1-7][,']?|0)$").hasMatch(value)) {
-    return '无法识别的数字简谱符号“$value”。';
-  }
-  if (type == SmartGridRowType.lyrics &&
-      RegExp(r"^(?:[1-7][,']?|0)$").hasMatch(value)) {
-    return '数字简谱符号只能填写在谱行。';
-  }
-  return null;
 }
 
 List<SmartGridRow> _separateRows(String score, String lyrics) {
@@ -154,6 +136,11 @@ SmartGridRow _row(String id, String group, SmartGridRowType type, String text,
 }
 
 List<String> _tokens(String text, {required bool splitChinese}) {
+  if (splitChinese) {
+    return splitSmartGridLyricCells(text)
+        .map((value) => value == '_' ? '' : value)
+        .toList();
+  }
   final normalized =
       text.replaceAll('//', ' // ').replaceAll('|', ' | ').trim();
   final chunks =
@@ -164,15 +151,7 @@ List<String> _tokens(String text, {required bool splitChinese}) {
       result.add('');
       continue;
     }
-    if (splitChinese &&
-        !chunk.contains(RegExp(r'[A-Za-z0-9]')) &&
-        chunk != '//' &&
-        chunk != '|' &&
-        chunk != '-') {
-      result.addAll(chunk.runes.map(String.fromCharCode));
-    } else {
-      result.add(chunk);
-    }
+    result.add(chunk);
   }
   return result;
 }

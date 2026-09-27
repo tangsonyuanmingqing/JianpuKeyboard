@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme/app_theme_mode.dart';
+import '../../app/window/window_pin.dart';
 import '../../core/mapping/mapping_draft.dart';
 import '../../core/models/register.dart';
 import 'converter_providers.dart';
@@ -64,6 +66,7 @@ class _MappingPageState extends ConsumerState<MappingPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('键盘映射'),
+        actions: const [ThemeToggleButton(), WindowPinToggleButton()],
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -78,7 +81,9 @@ class _MappingPageState extends ConsumerState<MappingPage> {
                     Text(
                       mappingMessage,
                       key: const Key('mapping-persistence-message'),
-                      style: TextStyle(color: theme.colorScheme.error),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -86,7 +91,9 @@ class _MappingPageState extends ConsumerState<MappingPage> {
                     Text(
                       '键位有误，当前修改不会保存。',
                       key: const Key('mapping-unsaved-message'),
-                      style: TextStyle(color: theme.colorScheme.error),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -97,7 +104,9 @@ class _MappingPageState extends ConsumerState<MappingPage> {
                         child: Text(
                           '⚠ ${warning.message}',
                           key: Key('mapping-warning-${warning.key}'),
-                          style: TextStyle(color: theme.colorScheme.tertiary),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                          ),
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -233,7 +242,9 @@ class _RegisterSection extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               error.message,
-              style: TextStyle(color: theme.colorScheme.error),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ],
           const SizedBox(height: 8),
@@ -321,14 +332,18 @@ class _KeyField extends StatelessWidget {
           Text(
             _errorLabel(error!),
             key: Key('mapping-error-${register.name}-$degree'),
-            style: TextStyle(color: theme.colorScheme.error),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
           ),
         ],
         if (warningText != null) ...[
           const SizedBox(height: 4),
           Text(
             warningText!,
-            style: TextStyle(color: theme.colorScheme.tertiary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.tertiary,
+            ),
           ),
         ],
       ],

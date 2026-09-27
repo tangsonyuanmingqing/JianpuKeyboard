@@ -37,6 +37,6 @@ void main() {
       ]),
     );
 
-    expect(renderer.render(score), 'D  F  G\n我 爱 你\nH  J\n和 他');
+    expect(renderer.render(score), 'Ｄ Ｆ Ｇ\n我 爱 你\nＨ Ｊ\n和 他');
   });
 }

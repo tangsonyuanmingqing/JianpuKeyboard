@@ -7,6 +7,29 @@ import 'package:jianpu_keyboard/features/converter/smart_grid_document.dart';
 import 'package:jianpu_keyboard/features/converter/smart_grid_inspection_renderer.dart';
 
 void main() {
+  test('100x100 document edits remain below the 100ms interaction budget', () {
+    var document = SmartGridDocument.empty(rows: 100, columns: 100);
+    for (var warmup = 0; warmup < 10; warmup++) {
+      document = document.setCell(warmup, warmup, '3');
+    }
+
+    final timings = <int>[];
+    for (var run = 0; run < 50; run++) {
+      final stopwatch = Stopwatch()..start();
+      document = document
+          .setCell(run % 100, (run * 7) % 100, '${run % 8}')
+          .copyWith(selectedRow: run % 100, selectedColumn: (run * 7) % 100);
+      stopwatch.stop();
+      timings.add(stopwatch.elapsedMicroseconds);
+    }
+    timings.sort();
+    final p95 = timings[(timings.length * .95).floor()];
+
+    expect(p95, lessThan(100000), reason: 'p95 was $p95µs');
+    expect(document.rows, hasLength(100));
+    expect(document.columnCount, 100);
+  });
+
   test('column labels continue after Z', () {
     expect(smartGridColumnLabel(0), 'A');
     expect(smartGridColumnLabel(25), 'Z');
@@ -39,6 +62,33 @@ void main() {
     final imported = const SmartGridCodec().importInput(text);
     expect(imported.isValid, isTrue);
     expect(imported.document!.rows[0].cells, ['3', '', '4']);
+  });
+
+  test('accepts numeric lyrics and splits mixed lyrics on import', () {
+    final imported = const SmartGridCodec().importInput(
+      const ConverterInput(scoreText: '[谱] 1 2 3;\n[词] 第520次;'),
+    );
+
+    expect(imported.isValid, isTrue);
+    expect(imported.document!.rows[1].cells.take(3), ['第', '520', '次']);
+  });
+
+  test('overwrites adjacent lyric cells in one document operation', () {
+    final document = SmartGridDocument.empty(rows: 2, columns: 2)
+        .setCell(1, 0, '旧')
+        .setCell(1, 1, '词');
+
+    final result = document.overwriteCells(
+      1,
+      0,
+      const ['第', '520', '次'],
+      keepTrailingCell: true,
+    );
+
+    expect(result.writtenCount, 3);
+    expect(result.omittedCount, 0);
+    expect(result.document.columnCount, 4);
+    expect(result.document.rows[1].cells, ['第', '520', '次', '']);
   });
 
   test('converts cells without collapsing blank columns', () {
@@ -172,7 +222,7 @@ void main() {
       const KeyboardMapping(),
     );
 
-    expect(converted.result.output, 'D   F\n黑  你');
+    expect(converted.result.output, 'Ｄ    Ｆ\n黑    你');
   });
 
   test('aligns an English lyric cell without moving later columns', () {
@@ -188,7 +238,7 @@ void main() {
       const KeyboardMapping(),
     );
 
-    expect(converted.result.output, 'D    F\nlove 你');
+    expect(converted.result.output, ' Ｄ  Ｆ\nlove 你');
   });
 
   test('keeps special symbols in their original paired columns', () {
@@ -212,7 +262,7 @@ void main() {
       const KeyboardMapping(),
     );
 
-    expect(converted.result.output, 'D  // F  - | G\n黑 // 天 - | 空');
+    expect(converted.result.output, 'Ｄ // Ｆ - | Ｇ\n黑 // 天 - | 空');
   });
 
   test('renders an unpaired populated row independently', () {

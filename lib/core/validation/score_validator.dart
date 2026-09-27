@@ -114,8 +114,8 @@ class ScoreValidator {
             message: '${segment.label}：$missingLyricsMessage',
           ),
         );
-        missingPositions.addAll(_notes(Score(lines: [scoreLine]))
-            .map((note) => note.position));
+        missingPositions.addAll(
+            _notes(Score(lines: [scoreLine])).map((note) => note.position));
         continue;
       }
       final validation = validate(

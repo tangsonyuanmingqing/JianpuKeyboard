@@ -4,24 +4,10 @@ import '../../core/models/parse_error.dart';
 import '../../core/models/register.dart';
 import '../../core/models/validation_message.dart';
 import '../../core/renderer/display_width.dart';
-import 'smart_grid_codec.dart';
 import 'smart_grid_document.dart';
+import 'smart_grid_validation.dart';
 
-enum SmartGridIssueSeverity { error, warning }
-
-class SmartGridIssue {
-  final int row;
-  final int column;
-  final SmartGridIssueSeverity severity;
-  final String message;
-
-  const SmartGridIssue({
-    required this.row,
-    required this.column,
-    required this.severity,
-    required this.message,
-  });
-}
+export 'smart_grid_validation.dart' show SmartGridIssue, SmartGridIssueSeverity;
 
 class SmartGridConversion {
   final ConversionResult result;
@@ -147,16 +133,26 @@ class SmartGridConverter {
       }
     }
 
-    final pairedWidths = _pairedColumnWidths(document, outputRows);
+    final plainRows = <List<String>>[
+      for (var index = 0; index < outputRows.length; index++)
+        _plainTextCells(document.rows[index].type, outputRows[index]),
+    ];
+    final pairedWidths = _pairedColumnWidths(document, plainRows);
     final plainLines = <String>[];
     for (var index = 0; index < outputRows.length; index++) {
       if (document.rows[index].cells.every((cell) => cell.isEmpty)) continue;
-      final row = outputRows[index];
-      final last = row.lastIndexWhere((cell) => cell.isNotEmpty);
+      final row = plainRows[index];
+      final last = document.rows[index].cells.lastIndexWhere(
+        (cell) => cell.isNotEmpty,
+      );
       final widths = pairedWidths[index] ??
           [
             for (var column = 0; column <= last; column++)
-              displayWidth(row[column]),
+              _plainTextColumnWidth(
+                document.rows[index].type,
+                document.rows[index].cells[column],
+                row[column],
+              ),
           ];
       final pairedLast =
           pairedWidths.containsKey(index) ? widths.length - 1 : last;
@@ -178,7 +174,7 @@ class SmartGridConverter {
 /// the same group. A group with only one populated row stays independent.
 Map<int, List<int>> _pairedColumnWidths(
   SmartGridDocument document,
-  List<List<String>> outputRows,
+  List<List<String>> plainRows,
 ) {
   final rowsByGroup = <String, List<int>>{};
   for (var index = 0; index < document.rows.length; index++) {
@@ -201,18 +197,34 @@ Map<int, List<int>> _pairedColumnWidths(
     }
     if (scoreIndex == null || lyricsIndex == null) continue;
 
-    final score = outputRows[scoreIndex];
-    final lyrics = outputRows[lyricsIndex];
-    final last = _lastOccupiedColumn(score, lyrics);
+    final pairedScoreIndex = scoreIndex;
+    final pairedLyricsIndex = lyricsIndex;
+
+    final score = plainRows[pairedScoreIndex];
+    final lyrics = plainRows[pairedLyricsIndex];
+    final last = _lastOccupiedColumn(
+      document.rows[pairedScoreIndex].cells,
+      document.rows[pairedLyricsIndex].cells,
+    );
     if (last < 0) continue;
     final widths = List<int>.generate(
       last + 1,
-      (column) => displayWidth(score[column]) > displayWidth(lyrics[column])
-          ? displayWidth(score[column])
-          : displayWidth(lyrics[column]),
+      (column) {
+        final scoreWidth = _plainTextColumnWidth(
+          SmartGridRowType.score,
+          document.rows[pairedScoreIndex].cells[column],
+          score[column],
+        );
+        final lyricWidth = _plainTextColumnWidth(
+          SmartGridRowType.lyrics,
+          document.rows[pairedLyricsIndex].cells[column],
+          lyrics[column],
+        );
+        return scoreWidth > lyricWidth ? scoreWidth : lyricWidth;
+      },
     );
-    widthsByRow[scoreIndex] = widths;
-    widthsByRow[lyricsIndex] = widths;
+    widthsByRow[pairedScoreIndex] = widths;
+    widthsByRow[pairedLyricsIndex] = widths;
   }
   return widthsByRow;
 }
@@ -225,10 +237,33 @@ int _lastOccupiedColumn(List<String> first, List<String> second) {
 }
 
 String _renderPlainRow(List<String> row, List<int> widths, int last) {
-  return [
-    for (var column = 0; column <= last; column++)
-      padToDisplayWidth(row[column], widths[column]),
-  ].join(' ').trimRight();
+  return renderCenteredDisplayRow(
+    row.sublist(0, last + 1),
+    widths.sublist(0, last + 1),
+  );
+}
+
+List<String> _plainTextCells(SmartGridRowType type, List<String> cells) => [
+      for (final cell in cells) _plainTextCell(type, cell),
+    ];
+
+String _plainTextCell(SmartGridRowType type, String cell) {
+  if (type != SmartGridRowType.score) return cell;
+  if (cell == '0') return '';
+  return toFullwidthKeyboardLetters(cell);
+}
+
+int _plainTextColumnWidth(
+  SmartGridRowType type,
+  String sourceCell,
+  String renderedCell,
+) {
+  final contentWidth = displayWidth(renderedCell);
+  if (sourceCell.isEmpty ||
+      (type == SmartGridRowType.score && sourceCell == '0')) {
+    return contentWidth < 2 ? 2 : contentWidth;
+  }
+  return contentWidth;
 }
 
 String _mapScoreCell(String value, KeyboardMapping mapping) {

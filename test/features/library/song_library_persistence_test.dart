@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jianpu_keyboard/core/mapping/keyboard_mapping.dart';
@@ -6,6 +7,9 @@ import 'package:jianpu_keyboard/features/converter/converter_input.dart';
 import 'package:jianpu_keyboard/features/converter/smart_grid_document.dart';
 import 'package:jianpu_keyboard/features/library/song_library_persistence.dart';
 import 'package:jianpu_keyboard/features/library/song_record.dart';
+import 'package:jianpu_keyboard/infrastructure/app_data_store.dart';
+import 'package:jianpu_keyboard/infrastructure/persistence_load_result.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   SongRecord song() {
@@ -40,6 +44,7 @@ void main() {
     expect(decoded.single.input.lyricsText, '晨 光');
     expect(decoded.single.result!.output, 'D F G');
     expect(decoded.single.result!.warnings, hasLength(1));
+    expect(decoded.single.result!.usesCurrentOutputFormat, isTrue);
     expect(decoded.single.editorMode, 'grid');
     expect(decoded.single.gridDocument!.rows[0].cells[0], '3');
   });
@@ -59,6 +64,20 @@ void main() {
     expect(decoded.single.gridDocument, isNull);
   });
 
+  test('marks a result without a text format version as stale', () {
+    final legacyResult = Map<String, Object?>.from(song().result!.toJson())
+      ..remove('outputFormatVersion');
+    final legacySong = Map<String, Object?>.from(song().toJson())
+      ..['result'] = legacyResult;
+    final decoded = SongLibraryPersistence.decodeDocument(jsonEncode({
+      'version': SongLibraryPersistence.documentVersion,
+      'songs': [legacySong],
+    }));
+
+    expect(decoded.single.resultIsStale, isTrue);
+    expect(decoded.single.result!.outputFormatVersion, 1);
+  });
+
   test('damaged or unsupported backup is rejected before import', () {
     expect(
       () => SongLibraryPersistence.decodeDocument('{"version":3,"songs":[]}'),
@@ -69,4 +88,55 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('migrates the legacy library without removing its rollback copy',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('jianpu-library-');
+    addTearDown(() => directory.delete(recursive: true));
+    final preferences = _PreferencesFake()
+      ..values[SongLibraryPersistence.storageKey] =
+          SongLibraryPersistence.encodeDocument([song()]);
+    final store = AtomicFileStore(
+      directoryProvider: FixedAppDataDirectoryProvider(directory),
+    );
+
+    final result = await SongLibraryPersistence(
+      preferences: preferences,
+      store: store,
+    ).loadDetailed();
+
+    expect(result.status, PersistenceLoadStatus.normal);
+    expect(result.migrated, true);
+    expect(result.value.single.title, '晨光');
+    expect(preferences.values, contains(SongLibraryPersistence.storageKey));
+    expect(await store.read(SongLibraryPersistence.primaryPath), isNotNull);
+  });
+
+  test('reports corrupt primary data instead of silently loading an empty list',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('jianpu-library-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = AtomicFileStore(
+      directoryProvider: FixedAppDataDirectoryProvider(directory),
+    );
+    await store.write(SongLibraryPersistence.primaryPath, '{broken');
+
+    final result = await SongLibraryPersistence(store: store).loadDetailed();
+
+    expect(result.status, PersistenceLoadStatus.corrupt);
+    expect(result.rawData, '{broken');
+    expect(result.blocksWrites, true);
+  });
+}
+
+class _PreferencesFake extends Fake implements SharedPreferencesAsync {
+  final Map<String, String> values = {};
+
+  @override
+  Future<String?> getString(String key) async => values[key];
+
+  @override
+  Future<void> setString(String key, String value) async {
+    values[key] = value;
+  }
 }

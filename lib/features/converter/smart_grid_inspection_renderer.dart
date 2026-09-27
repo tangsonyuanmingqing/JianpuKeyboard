@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme/app_typography.dart';
 import 'smart_grid_converter.dart';
 import 'smart_grid_document.dart';
 
@@ -11,19 +12,22 @@ class SmartGridInspectionRenderer {
   static const _cellHeight = 48.0;
   static const _rowHeaderWidth = 110.0;
   static const _columnHeaderHeight = 38.0;
+  static const _titleHeight = 52.0;
   static const _maxImageDimension = 16000;
   static const _maxImagePixels = 80000000;
 
   const SmartGridInspectionRenderer();
 
   Future<Uint8List> render(
-    SmartGridDocument document,
-    SmartGridConversion conversion,
-  ) async {
+      SmartGridDocument document, SmartGridConversion conversion,
+      {String songTitle = ''}) async {
     final rowCount = _visibleRowCount(document, conversion);
     final columnCount = _visibleColumnCount(document, conversion);
+    final normalizedTitle = songTitle.trim();
+    final titleHeight = normalizedTitle.isEmpty ? 0.0 : _titleHeight;
     final width = (_rowHeaderWidth + columnCount * _cellWidth).ceil();
-    final height = (_columnHeaderHeight + rowCount * _cellHeight).ceil();
+    final height =
+        (titleHeight + _columnHeaderHeight + rowCount * _cellHeight).ceil();
     if (width > _maxImageDimension ||
         height > _maxImageDimension ||
         width * height > _maxImagePixels) {
@@ -37,9 +41,13 @@ class SmartGridInspectionRenderer {
       Paint()..color = const Color(0xfffbf9ff),
     );
 
+    if (normalizedTitle.isNotEmpty) {
+      _paintTitle(canvas, normalizedTitle, width.toDouble(), titleHeight);
+    }
+
     _paintCell(
       canvas,
-      const Rect.fromLTWH(0, 0, _rowHeaderWidth, _columnHeaderHeight),
+      Rect.fromLTWH(0, titleHeight, _rowHeaderWidth, _columnHeaderHeight),
       '行 / 类型',
       background: const Color(0xffe8e8ef),
       bold: true,
@@ -49,7 +57,7 @@ class SmartGridInspectionRenderer {
         canvas,
         Rect.fromLTWH(
           _rowHeaderWidth + column * _cellWidth,
-          0,
+          titleHeight,
           _cellWidth,
           _columnHeaderHeight,
         ),
@@ -65,7 +73,7 @@ class SmartGridInspectionRenderer {
       final tint = groupNumber.isEven
           ? const Color(0xfff1eaf9)
           : const Color(0xffeaf0fb);
-      final top = _columnHeaderHeight + row * _cellHeight;
+      final top = titleHeight + _columnHeaderHeight + row * _cellHeight;
       _paintCell(
         canvas,
         Rect.fromLTWH(0, top, _rowHeaderWidth, _cellHeight),
@@ -162,14 +170,12 @@ class SmartGridInspectionRenderer {
         ..color = const Color(0xff8c8c96)
         ..style = PaintingStyle.stroke,
     );
+    const typography = AppTypography.standard();
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(
-          color: const Color(0xff202027),
-          fontSize: 15,
-          fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
-        ),
+        style: (bold ? typography.inspectionHeader : typography.inspectionCell)
+            .copyWith(color: const Color(0xff202027)),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,
@@ -182,6 +188,26 @@ class SmartGridInspectionRenderer {
         rect.left + (rect.width - painter.width) / 2,
         rect.top + (rect.height - painter.height) / 2,
       ),
+    );
+  }
+
+  void _paintTitle(Canvas canvas, String title, double width, double height) {
+    const typography = AppTypography.standard();
+    final painter = TextPainter(
+      text: TextSpan(
+        text: title,
+        style: typography.inspectionTitle.copyWith(
+          color: const Color(0xff202027),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+      textAlign: TextAlign.center,
+    )..layout(maxWidth: width - 24);
+    painter.paint(
+      canvas,
+      Offset((width - painter.width) / 2, (height - painter.height) / 2),
     );
   }
 }

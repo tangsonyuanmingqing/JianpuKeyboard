@@ -26,4 +26,11 @@ void main() {
     expect(padToDisplayWidth('我', 2), '我');
     expect(padToDisplayWidth('', 1), ' ');
   });
+
+  test('uses fullwidth keyboard letters and centres spare display cells', () {
+    expect(toFullwidthKeyboardLetters('D-F'), 'Ｄ-Ｆ');
+    expect(displayWidth('Ｄ'), 2);
+    expect(centerToDisplayWidth('A', 2), 'A ');
+    expect(centerToDisplayWidth('田', 2), '田');
+  });
 }

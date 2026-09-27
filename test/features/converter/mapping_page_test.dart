@@ -17,6 +17,10 @@ void main() {
   };
 
   Future<ProviderContainer> pumpPage(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final container = _testContainer();
     addTearDown(container.dispose);
     await tester.pumpWidget(
@@ -130,20 +134,20 @@ void main() {
     await tester.enterText(find.byKey(const Key('score-input')), '3');
     await tester.tap(find.byKey(const Key('convert-button')));
     await tester.pump();
-    expect(find.text('D'), findsOneWidget);
+    expect(find.text('Ｄ'), findsOneWidget);
 
     await openMapping(tester);
     await editField(tester, Register.middle, 3, 'E');
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    expect(find.text('D'), findsNothing);
-    expect(find.text('E'), findsNothing);
+    expect(find.text('Ｄ'), findsNothing);
+    expect(find.text('Ｅ'), findsNothing);
     expect(find.text('转换结果将显示在这里'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('convert-button')));
     await tester.pump();
-    expect(find.text('E'), findsOneWidget);
+    expect(find.text('Ｅ'), findsOneWidget);
   });
 
   testWidgets('restores the default mapping without converting',
@@ -161,12 +165,12 @@ void main() {
     expect(fieldText(tester, Register.middle, 3), 'D');
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('E'), findsNothing);
+    expect(find.text('Ｅ'), findsNothing);
     expect(find.text('转换结果将显示在这里'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('convert-button')));
     await tester.pump();
-    expect(find.text('D'), findsOneWidget);
+    expect(find.text('Ｄ'), findsOneWidget);
   });
 
   testWidgets('shows a duplicate-key warning and still converts',
@@ -184,7 +188,7 @@ void main() {
     await tester.tap(find.byKey(const Key('convert-button')));
     await tester.pump();
 
-    expect(find.text('A'), findsOneWidget);
+    expect(find.text('Ａ'), findsOneWidget);
     expect(find.text('键 A 被多个音符使用'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
   });

@@ -1,8 +1,14 @@
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'resizable_panel.dart';
+
+final converterPanelLayoutPersistenceProvider =
+    Provider<ConverterPanelLayoutPersistence>(
+  (ref) => ConverterPanelLayoutPersistence(),
+);
 
 /// Stores converter panel sizes as a global UI preference, separate from song
 /// drafts and conversion content.

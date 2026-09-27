@@ -123,12 +123,14 @@ class _ResizablePanelState extends State<ResizablePanel> {
                           child: Text(
                             '${width.round()} × ${height.round()}',
                             key: Key('${widget.panelId}-resize-dimensions'),
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onInverseSurface,
-                              fontSize: 12,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onInverseSurface,
+                                ),
                           ),
                         ),
                       ),

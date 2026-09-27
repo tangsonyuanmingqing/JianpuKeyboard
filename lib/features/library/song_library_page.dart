@@ -3,16 +3,28 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../app/theme/app_theme_mode.dart';
+import '../../app/window/window_pin.dart';
+import '../../app/theme/app_typography.dart';
+import '../../infrastructure/storage_health.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../core/mapping/keyboard_mapping.dart';
 import '../../core/mapping/mapping_draft.dart';
 import '../converter/converter_providers.dart';
 import '../converter/png_export_service.dart';
+import '../converter/song_output_formatter.dart';
+import '../converter/converter_panel_layout_persistence.dart';
+import '../converter/resizable_panel.dart';
+import '../converter/smart_grid_converter.dart';
+import '../converter/smart_grid_editor.dart';
+import '../converter/table_scale.dart';
 import 'song_library_file_service.dart';
 import 'song_library_persistence.dart';
 import 'song_library_providers.dart';
 import 'song_record.dart';
+import 'recovery_center_page.dart';
 
 class SongLoadRequest {
   final SongRecord song;
@@ -34,6 +46,8 @@ class _SongLibraryPageState extends ConsumerState<SongLibraryPage> {
   @override
   Widget build(BuildContext context) {
     final songs = ref.watch(songLibraryProvider);
+    final storageHealth = ref.watch(songLibraryStorageHealthProvider);
+    final writeState = ref.watch(songLibraryWriteStateProvider);
     final tags = {for (final song in songs) ...song.tags}.toList()..sort();
     final filtered = songs.where((song) {
       final searchable =
@@ -48,6 +62,11 @@ class _SongLibraryPageState extends ConsumerState<SongLibraryPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('曲谱库'), actions: [
         IconButton(
+            key: const Key('open-recovery-center-button'),
+            tooltip: '备份与恢复',
+            icon: const Icon(Icons.restore_page),
+            onPressed: _openRecoveryCenter),
+        IconButton(
             tooltip: '导入备份',
             icon: const Icon(Icons.file_open),
             onPressed: _import),
@@ -55,8 +74,27 @@ class _SongLibraryPageState extends ConsumerState<SongLibraryPage> {
             tooltip: '导出全部',
             icon: const Icon(Icons.upload_file),
             onPressed: songs.isEmpty ? null : () => _export(songs)),
+        const ThemeToggleButton(),
+        const WindowPinToggleButton(),
       ]),
       body: Column(children: [
+        if (storageHealth.blocksWrites)
+          MaterialBanner(
+            content: Text(storageHealth.message ?? '曲谱库需要恢复。'),
+            actions: [
+              TextButton(
+                onPressed: _openRecoveryCenter,
+                child: const Text('打开恢复中心'),
+              ),
+            ],
+          ),
+        if (writeState.phase == PersistenceWritePhase.saving)
+          const LinearProgressIndicator(minHeight: 2),
+        if (writeState.phase == PersistenceWritePhase.failed)
+          MaterialBanner(
+            content: Text(writeState.message ?? '曲谱库保存失败。'),
+            actions: const [SizedBox.shrink()],
+          ),
         Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
@@ -119,13 +157,25 @@ class _SongLibraryPageState extends ConsumerState<SongLibraryPage> {
                                 builder: (_) =>
                                     SongDetailPage(songId: song.id)))
                             .then((value) {
-                          if (value is SongLoadRequest && mounted)
+                          if (value is SongLoadRequest && context.mounted) {
                             Navigator.pop(context, value);
+                          }
                         }),
                       ));
                     }))
       ]),
     );
+  }
+
+  Future<void> _openRecoveryCenter() async {
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute<Object?>(
+        builder: (_) => const RecoveryCenterPage(),
+      ),
+    );
+    if (result is DraftRecoveryRequest && mounted) {
+      Navigator.pop(context, result);
+    }
   }
 
   Future<void> _export(List<SongRecord> songs) async {
@@ -171,9 +221,11 @@ class _SongLibraryPageState extends ConsumerState<SongLibraryPage> {
       final next = [...current];
       for (final song in incoming) {
         final index = next.indexWhere((item) => item.id == song.id);
-        if (index < 0)
+        if (index < 0) {
           next.add(song);
-        else if (overwrite) next[index] = song;
+        } else if (overwrite) {
+          next[index] = song;
+        }
       }
       await ref.read(songLibraryProvider.notifier).replaceAll(next);
       if (mounted) _message('已导入 ${incoming.length} 条曲谱');
@@ -188,22 +240,62 @@ class _SongLibraryPageState extends ConsumerState<SongLibraryPage> {
       .showSnackBar(SnackBar(content: Text(value)));
 }
 
-class SongDetailPage extends ConsumerWidget {
+class SongDetailPage extends ConsumerStatefulWidget {
   final String songId;
-  final GlobalKey _snapshotImageKey = GlobalKey();
-  SongDetailPage({super.key, required this.songId});
+  const SongDetailPage({super.key, required this.songId});
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SongDetailPage> createState() => _SongDetailPageState();
+}
+
+class _SongDetailPageState extends ConsumerState<SongDetailPage> {
+  final GlobalKey _snapshotImageKey = GlobalKey();
+  late final ConverterPanelLayoutPersistence _panelLayoutPersistence;
+  Map<String, ResizablePanelSize> _panelSizes = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _panelLayoutPersistence = ConverterPanelLayoutPersistence();
+    _restorePanelLayout();
+  }
+
+  Future<void> _restorePanelLayout() async {
+    final saved = await _panelLayoutPersistence.load();
+    if (mounted && saved.isNotEmpty) setState(() => _panelSizes = saved);
+  }
+
+  ResizablePanelSize _panelSize(String id) =>
+      _panelSizes[id] ?? const ResizablePanelSize();
+
+  void _updatePanelSize(String id, ResizablePanelSize size) {
+    setState(() {
+      final next = Map<String, ResizablePanelSize>.of(_panelSizes);
+      if (size.isDefault) {
+        next.remove(id);
+      } else {
+        next[id] = size;
+      }
+      _panelSizes = next;
+    });
+    _panelLayoutPersistence.save(_panelSizes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     SongRecord? song;
     for (final item in ref.watch(songLibraryProvider)) {
-      if (item.id == songId) {
+      if (item.id == widget.songId) {
         song = item;
         break;
       }
     }
-    if (song == null)
+    if (song == null) {
       return const Scaffold(body: Center(child: Text('该曲谱已删除')));
+    }
     final selectedSong = song;
+    final tableScale = ref.watch(tableScaleProvider);
+    final gridConversion = _savedGridConversion(selectedSong);
     return Scaffold(
         appBar: AppBar(title: Text(selectedSong.title), actions: [
           IconButton(
@@ -213,10 +305,13 @@ class SongDetailPage extends ConsumerWidget {
                 final path = await const SongLibraryFileService().saveJson(
                     SongLibraryPersistence.encodeDocument([selectedSong]),
                     suggestedName: '${selectedSong.title}.json');
-                if (context.mounted)
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(path == null ? '已取消导出' : '曲谱已导出')));
-              })
+                }
+              }),
+          const ThemeToggleButton(),
+          const WindowPinToggleButton(),
         ]),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           if (selectedSong.artist.isNotEmpty)
@@ -254,30 +349,53 @@ class SongDetailPage extends ConsumerWidget {
                             color:
                                 Theme.of(context).colorScheme.outlineVariant),
                         borderRadius: BorderRadius.circular(8)),
-                    child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SelectableText(selectedSong.result!.output,
-                            style: const TextStyle(
-                                fontFamily: 'NSimSun',
-                                fontFamilyFallback: [
-                                  'SimSun',
-                                  'Consolas',
-                                  'monospace'
-                                ],
-                                height: 1.5))))),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          selectedSong.title,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.of(context).songTitle,
+                        ),
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SelectableText(
+                            selectedSong.result!.output,
+                            style: AppTypography.of(context).notationBody,
+                          ),
+                        ),
+                      ],
+                    ))),
+            if (gridConversion != null) ...[
+              const SizedBox(height: 16),
+              const GlobalTableScaleControl(),
+              const SizedBox(height: 8),
+              SmartGridOutputView(
+                document: selectedSong.gridDocument!,
+                conversion: gridConversion,
+                scale: tableScale,
+                panelSize: _panelSize('library-letter-grid'),
+                onPanelSizeChanged: (size) =>
+                    _updatePanelSize('library-letter-grid', size),
+              ),
+            ],
             Wrap(spacing: 8, children: [
               TextButton.icon(
                   onPressed: () async {
-                    await Clipboard.setData(
-                        ClipboardData(text: selectedSong.result!.output));
-                    if (context.mounted)
+                    await Clipboard.setData(ClipboardData(
+                        text: formatSongOutput(
+                            selectedSong.title, selectedSong.result!.output)));
+                    if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('已复制转换结果')));
+                    }
                   },
                   icon: const Icon(Icons.copy),
                   label: const Text('复制')),
               TextButton.icon(
-                  onPressed: () => _exportSnapshot(context),
+                  onPressed: () => _exportSnapshot(context, selectedSong),
                   icon: const Icon(Icons.image),
                   label: const Text('导出图片')),
               TextButton.icon(
@@ -294,6 +412,26 @@ class SongDetailPage extends ConsumerWidget {
               icon: const Icon(Icons.delete),
               label: const Text('删除曲谱')),
         ]));
+  }
+
+  SmartGridConversion? _savedGridConversion(SongRecord song) {
+    if (song.result == null ||
+        song.resultIsStale ||
+        song.editorMode != 'grid' ||
+        song.gridDocument == null) {
+      return null;
+    }
+    final parsed = KeyboardMapping.fromJson(song.result!.mapping);
+    if (!parsed.isValid) return null;
+    final conversion = const SmartGridConverter().convert(
+      song.gridDocument!,
+      parsed.mapping!,
+    );
+    if (conversion.result.hasErrors ||
+        conversion.result.output != song.result!.output) {
+      return null;
+    }
+    return conversion;
   }
 
   Future<void> _applyMapping(
@@ -317,12 +455,13 @@ class SongDetailPage extends ConsumerWidget {
     ref
         .read(mappingDraftProvider.notifier)
         .updateMapping(MappingDraft.fromMapping(parsed.mapping!));
-    if (context.mounted)
+    if (context.mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('已应用保存的键位')));
+    }
   }
 
-  Future<void> _exportSnapshot(BuildContext context) async {
+  Future<void> _exportSnapshot(BuildContext context, SongRecord song) async {
     try {
       final boundary = _snapshotImageKey.currentContext?.findRenderObject()
           as RenderRepaintBoundary?;
@@ -333,6 +472,8 @@ class SongDetailPage extends ConsumerWidget {
       if (data == null) throw StateError('无法生成图片');
       final path = await const PngExportService().export(
         Uint8List.view(data.buffer),
+        songTitle: song.title,
+        imageType: '字母简谱',
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

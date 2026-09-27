@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/theme/app_typography.dart';
+import '../../app/theme/app_theme_mode.dart';
+import '../../app/window/window_pin.dart';
 import 'converter_examples.dart';
 
 class FormatHelpPage extends StatelessWidget {
@@ -11,7 +14,10 @@ class FormatHelpPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('格式说明')),
+      appBar: AppBar(
+        title: const Text('格式说明'),
+        actions: const [ThemeToggleButton(), WindowPinToggleButton()],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -22,13 +28,15 @@ class FormatHelpPage extends StatelessWidget {
           const SizedBox(height: 20),
           Text('默认键位', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
-          const SelectableText(
-              '低音：Z X C V B N M\n中音：A S D F G H J\n高音：Q W E R T Y U'),
+          SelectableText(
+            '低音：Z X C V B N M\n中音：A S D F G H J\n高音：Q W E R T Y U',
+            style: AppTypography.of(context).notationBody,
+          ),
           const SizedBox(height: 20),
           Text('歌词对齐', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           const Text(
-              '普通歌词按顺序对应音符。歌词 - 表示延续上一个歌词；谱面中的 0、- 和 | 不消耗歌词。每个 [谱] 与其后的 [词] 就近配对；谱词都可用 // 分句、用 ; 分行。'),
+              '普通歌词按顺序对应音符。歌词可包含数字；歌词 - 表示延续上一个歌词；谱面中的 0、- 和 | 不消耗歌词。每个 [谱] 与其后的 [词] 就近配对；谱词都可用 // 分句、用 ; 分行。智能表格中可双击谱格选择数字简谱；连续输入歌词会自动分格，连续数字保留在同一格。'),
           const SizedBox(height: 20),
           Text('示例', style: Theme.of(context).textTheme.titleLarge),
           for (final example in converterExamples)

@@ -105,8 +105,6 @@ class ShareImageTextRenderer {
     return blocks;
   }
 
-  String _renderRow(List<String> texts, List<int> widths) => [
-        for (var i = 0; i < texts.length; i++)
-          padToDisplayWidth(texts[i], widths[i]),
-      ].join(' ').trimRight();
+  String _renderRow(List<String> texts, List<int> widths) =>
+      renderCenteredDisplayRow(texts, widths);
 }

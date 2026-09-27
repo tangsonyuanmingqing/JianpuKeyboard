@@ -103,7 +103,9 @@ class SongRecord {
         createdAt == null ||
         updatedAt == null ||
         rawTags is! List ||
-        rawTags.any((item) => item is! String)) return null;
+        rawTags.any((item) => item is! String)) {
+      return null;
+    }
     final rawResult = value['result'];
     final result =
         rawResult == null ? null : SongResultSnapshot.fromJson(rawResult);
@@ -122,7 +124,8 @@ class SongRecord {
       gridDocument: gridDocument,
       editorMode: value['editorMode'] == 'grid' ? 'grid' : 'text',
       result: result,
-      resultIsStale: value['resultIsStale'] == true,
+      resultIsStale: value['resultIsStale'] == true ||
+          (result != null && !result.usesCurrentOutputFormat),
       createdAt: createdAt.toUtc(),
       updatedAt: updatedAt.toUtc(),
     );
@@ -130,22 +133,30 @@ class SongRecord {
 }
 
 class SongResultSnapshot {
+  static const currentOutputFormatVersion = 2;
+
   final String output;
   final Map<String, Object?> mapping;
   final List<String> warnings;
   final DateTime savedAt;
+  final int outputFormatVersion;
 
   const SongResultSnapshot(
       {required this.output,
       required this.mapping,
       required this.warnings,
-      required this.savedAt});
+      required this.savedAt,
+      this.outputFormatVersion = currentOutputFormatVersion});
+
+  bool get usesCurrentOutputFormat =>
+      outputFormatVersion == currentOutputFormatVersion;
 
   Map<String, Object?> toJson() => {
         'output': output,
         'mapping': mapping,
         'warnings': warnings,
         'savedAt': savedAt.toUtc().toIso8601String(),
+        'outputFormatVersion': outputFormatVersion,
       };
 
   static SongResultSnapshot? fromJson(Object? value) {
@@ -154,7 +165,9 @@ class SongResultSnapshot {
         value['mapping'] is! Map ||
         value['warnings'] is! List ||
         (value['warnings'] as List).any((item) => item is! String) ||
-        value['savedAt'] is! String) return null;
+        value['savedAt'] is! String) {
+      return null;
+    }
     final mapping = <String, Object?>{};
     for (final entry in (value['mapping'] as Map).entries) {
       if (entry.key is! String) return null;
@@ -163,11 +176,16 @@ class SongResultSnapshot {
     if (!KeyboardMapping.fromJson(mapping).isValid) return null;
     final savedAt = DateTime.tryParse(value['savedAt'] as String);
     if (savedAt == null) return null;
+    final rawFormatVersion = value['outputFormatVersion'];
+    if (rawFormatVersion != null && rawFormatVersion is! int) {
+      return null;
+    }
     return SongResultSnapshot(
         output: value['output'] as String,
         mapping: Map.unmodifiable(mapping),
         warnings: List<String>.unmodifiable(
             (value['warnings'] as List).cast<String>()),
-        savedAt: savedAt.toUtc());
+        savedAt: savedAt.toUtc(),
+        outputFormatVersion: rawFormatVersion as int? ?? 1);
   }
 }

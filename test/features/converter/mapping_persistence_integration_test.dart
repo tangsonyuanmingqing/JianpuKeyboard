@@ -55,7 +55,7 @@ void main() {
 
     session.container.read(conversionResultProvider.notifier).convert();
 
-    expect(session.container.read(conversionResultProvider)?.output, 'E');
+    expect(session.container.read(conversionResultProvider)?.output, 'Ｅ');
   });
 
   test('a valid edit saves the mapping but never converts automatically',
@@ -65,7 +65,7 @@ void main() {
     final container = session.container;
     container.read(converterInputProvider.notifier).setScoreText('3');
     container.read(conversionResultProvider.notifier).convert();
-    expect(container.read(conversionResultProvider)?.output, 'D');
+    expect(container.read(conversionResultProvider)?.output, 'Ｄ');
 
     container.read(mappingDraftProvider.notifier).updateMapping(
           middleThree(container.read(mappingDraftProvider), 'E'),
@@ -119,7 +119,7 @@ void main() {
         );
     await session.persistence.whenIdle;
     container.read(conversionResultProvider.notifier).convert();
-    expect(container.read(conversionResultProvider)?.output, 'E');
+    expect(container.read(conversionResultProvider)?.output, 'Ｅ');
 
     container.read(mappingDraftProvider.notifier).restoreDefault();
     await session.persistence.whenIdle;
@@ -147,7 +147,7 @@ void main() {
     expect(container.read(mappingPersistenceMessageProvider), contains('保存'));
     expect(container.read(conversionResultProvider), isNull);
     container.read(conversionResultProvider.notifier).convert();
-    expect(container.read(conversionResultProvider)?.output, 'E');
+    expect(container.read(conversionResultProvider)?.output, 'Ｅ');
   });
 
   test('a later successful save clears the previous failure message', () async {

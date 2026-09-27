@@ -6,16 +6,11 @@
 
 ## 支持平台
 
-- Windows
-- macOS
-- Android
-- iOS
-
-核心业务使用共享 Dart 代码；平台相关能力以后通过独立适配层接入。
+当前正式验证和本地发布目标为 Windows x64。核心业务使用共享 Dart 代码，其他平台尚未进入正式验收。
 
 ## 当前版本
 
-V1.5.0。
+V1.6.0。安装版、便携版与 SHA-256 校验文件见 [GitHub Release](https://github.com/tangsonyuanmingqing/JianpuKeyboard/releases/tag/v1.6.0)，更新内容与升级注意事项见 [v1.6.0 发布说明](docs/releases/v1.6.0.md)。
 
 ## 当前功能
 
@@ -35,19 +30,25 @@ V1.5.0。
 - 点击「转换」后执行完整转换
 - 一键复制
 - 内置示例与格式说明
-- 自动保存并恢复输入草稿
+- 自动保存并恢复输入草稿与歌曲名
 - 本地曲谱库：保存歌曲名、歌手、标签、备注、数字简谱和歌词
 - 保存有效转换后的字母简谱、键位快照与转换提示
 - 曲谱库搜索、标签筛选、排序、一键填入、删除撤销
 - 曲谱库 JSON 单曲/全库导入导出
+- 曲谱库与当前草稿使用版本化原子 JSON 存储，首次启动自动迁移旧数据
+- 恢复中心：创建、预览、恢复、导出和删除曲谱库/草稿快照
+- 草稿保存状态、失败重试与退出前写入刷新
 - 已保存的字母简谱可复制、导出 PNG，并可应用保存时的键位
-- 导出干净的 PNG 字母简谱图片
+- 导出带歌曲名的干净 PNG 字母简谱图片；复制内容也会附带歌曲名
 - 导出带行列坐标、分组和问题标记的检查图
 - Windows x64 安装包与便携版发行
+- Windows 单实例：重复启动会激活已有窗口
+- Windows 窗口置顶
+- 白色／深灰黑主题切换，内置中文字体与统一排版
 
-编辑数字简谱、歌词或键位后，上一轮结果会被清空；点击「转换」才会显示按当前输入和键位生成的新结果。曲谱库会保留上次成功保存的结果；源谱改动后尚未重新转换时，曲谱库会标记为“转换结果待更新”。
+编辑数字简谱、歌词或键位后，当前有效结果会失效；文本模式清空上一轮结果，智能表格模式保留旧预览、降低表格透明度并标记“结果待更新”。点击「转换」才会按当前输入和键位生成新结果。主页标题栏下方可填写歌曲名；歌曲名会随临时草稿恢复，保存时会直接作为曲谱库标题。曲谱库会保留上次成功保存的结果；源谱改动后尚未重新转换时，曲谱库会标记为“转换结果待更新”。
 
-新建空白草稿默认使用智能表格。每个格子填写一个数字简谱 token、一个汉字、一个单词、一个字母或一个符号；空格子会保留对齐位置。选中单个格子后，可通过顶部「单元格操作」、右键或长按执行局部位移。表格仍可切换到文本输入，详细操作见 [docs/smart-grid.md](docs/smart-grid.md)。
+新建空白草稿默认使用智能表格。每个格子填写一个数字简谱 token、一个汉字、一个单词、一个字母或一个符号；空格子会保留对齐位置。选中单个格子后，可通过顶部「单元格操作」、右键或长按执行局部位移。工具栏中的「全局表格大小」会同步输入、输出和曲谱库预览表格，并在重启后恢复；可选择小 0%、中 50%、大 100%，或在 0%–100% 间微调。表格仍可切换到文本输入，详细操作见 [docs/smart-grid.md](docs/smart-grid.md)。
 
 数字简谱、歌词、智能表格、字母简谱表格和纯文本预览都可通过右下角斜纹拖动角调整宽高。双击拖动角会恢复默认大小；表格在缩窄后保持单元格大小并可滚动，纯文本预览继续保持谱词对齐。尺寸作为本机界面偏好保存，不影响曲谱草稿或图片导出。
 
@@ -124,6 +125,8 @@ flutter pub get
 flutter run
 ```
 
+应用排版使用内置 Noto Sans CJK SC 与 Noto Sans Mono CJK SC；界面和简谱文本的使用规则见[排版规范](docs/typography.md)。
+
 ## 测试方式
 
 ```bash
@@ -141,6 +144,16 @@ flutter test -d windows integration_test/mapping_persistence_restart_test.dart
 flutter test -d windows integration_test/mapping_persistence_reset_restart_test.dart
 ```
 
+100×100 智能表格的 Windows 真实界面性能验收：
+
+```powershell
+.\tools\run_windows_ui_performance.ps1 -Runs 3
+```
+
+运行前保存并关闭现有应用。测试使用 Profile 模式和临时数据目录，结果保存在 `build/performance/`；测量口径与复跑说明见 [Windows 真实界面性能验证](docs/windows-ui-performance.md)。
+
+默认测量 `default-valid`（默认 360 高度面板、有效数据）。可用 `-Scenario default-errors`、`large-valid` 或 `large-errors` 分别复测密集错误和大面板；每个场景独立统计，不覆盖个人布局偏好。
+
 ## 文档
 
 - [需求](docs/requirements.md)
@@ -148,5 +161,9 @@ flutter test -d windows integration_test/mapping_persistence_reset_restart_test.
 - [智能表格](docs/smart-grid.md)
 - [架构](docs/architecture.md)
 - [曲谱库与备份](docs/song-library.md)
+- [排版规范](docs/typography.md)
 - [路线图](docs/roadmap.md)
+- [v1.6.0 发布说明](docs/releases/v1.6.0.md)
+- [Windows 真实界面性能验证](docs/windows-ui-performance.md)
+- [Windows 打包](installer/README.md)
 - [V1.2 交付说明](docs/v1.2-spec.md)

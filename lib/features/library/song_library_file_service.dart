@@ -22,6 +22,6 @@ class SongLibraryFileService {
     final file = await openFile(acceptedTypeGroups: const [
       XTypeGroup(label: '曲谱库备份', extensions: ['json'])
     ]);
-    return file == null ? null : file.readAsString();
+    return file?.readAsString();
   }
 }
