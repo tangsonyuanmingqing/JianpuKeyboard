@@ -14,6 +14,8 @@ import 'package:jianpu_keyboard/features/converter/smart_grid_text_field.dart';
 import 'package:jianpu_keyboard/features/converter/smart_grid_issue_overlay.dart';
 import 'package:jianpu_keyboard/features/converter/table_scale.dart';
 
+import '../../support/table_scroll_test_helpers.dart';
+
 Future<void> _rightClick(WidgetTester tester, Finder target) async {
   final gesture = await tester.startGesture(
     tester.getCenter(target),
@@ -590,18 +592,12 @@ void main() {
     await mouse.addPointer(
       location: origin + Offset(size.width / 2, size.height - 4),
     );
-    await tester.pump();
-    expect(
-      tester.widget<Scrollbar>(find.byType(Scrollbar).first).thumbVisibility,
-      isTrue,
-    );
+    await tester.pumpAndSettle();
+    expect(tableThumb(tester, panel, Axis.horizontal), isNotNull);
 
     await mouse.moveTo(origin + Offset(size.width / 2, size.height / 2));
     await tester.pump(const Duration(milliseconds: 800));
-    expect(
-      tester.widget<Scrollbar>(find.byType(Scrollbar).first).thumbVisibility,
-      isFalse,
-    );
+    expect(tableThumb(tester, panel, Axis.horizontal), isNotNull);
 
     final cell = find.byKey(const ValueKey('grid-cell-row-1:0'));
     await _doubleClick(tester, cell);
@@ -614,10 +610,14 @@ void main() {
       tester.getTopLeft(panel) + Offset(size.width / 2, size.height - 4),
     );
     await tester.pump();
-    expect(
-      tester.widget<Scrollbar>(find.byType(Scrollbar).first).thumbVisibility,
-      isTrue,
-    );
+    expect(tableThumb(tester, panel, Axis.horizontal), isNotNull);
+    await dragTableThumb(tester, panel, Axis.horizontal, const Offset(60, 0));
+    final horizontal = tester
+        .widget<SingleChildScrollView>(find.descendant(
+            of: find.byType(SmartGridEditor),
+            matching: find.byType(SingleChildScrollView)))
+        .controller!;
+    expect(horizontal.offset, greaterThan(0));
   });
 
   testWidgets('keeps the output horizontal scrollbar visible through a rebuild',
@@ -648,18 +648,19 @@ void main() {
     await mouse.addPointer(
       location: origin + Offset(size.width / 2, size.height - 4),
     );
-    await tester.pump();
-    expect(
-      tester.widget<Scrollbar>(find.byType(Scrollbar).first).thumbVisibility,
-      isTrue,
-    );
+    await tester.pumpAndSettle();
+    expect(tableThumb(tester, panel, Axis.horizontal), isNotNull);
 
     await tester.pumpWidget(buildOutput(const TableScale(51)));
-    await tester.pump();
-    expect(
-      tester.widget<Scrollbar>(find.byType(Scrollbar).first).thumbVisibility,
-      isTrue,
-    );
+    await tester.pumpAndSettle();
+    expect(tableThumb(tester, panel, Axis.horizontal), isNotNull);
+    final horizontal = tester
+        .widget<SingleChildScrollView>(find.descendant(
+            of: find.byType(SmartGridOutputView),
+            matching: find.byType(SingleChildScrollView)))
+        .controller!;
+    await dragTableThumb(tester, panel, Axis.horizontal, const Offset(60, 0));
+    expect(horizontal.offset, greaterThan(0));
   });
 
   testWidgets('synchronizes both editor vertical panes in both directions',

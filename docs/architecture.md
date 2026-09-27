@@ -52,6 +52,8 @@ Core 不得依赖 Flutter Widget、BuildContext、剪贴板或任何操作系统
 
 `TableScrollLink` 负责正文／冻结列双向同步、范围裁剪及监听生命周期，编辑表格和输出表格复用；控制器所有权留在各自 Widget。`persistence_state_notifiers.dart` 共享存储健康／写入状态的转换，不共享域状态：草稿与曲谱库的 Provider、初始值、Repository 和事务仍独立。面板布局存储通过 Provider 注入，测试可以使用隔离配置，不触碰个人偏好。
 
+`TableScrollFrame` 只接收表格持有的横向控制器、正文纵向控制器、列标题高度和内容，统一输入／输出／曲谱库预览的轨道。内容与两条轨道采用 sibling 布局，底部／右侧固定预留 24 像素，右下角让给 `ResizablePanel` 的调整把手；轨道与实际视口长度一致，不依靠负边距补偿。模块按 `Scrollable` 的 `ScrollPosition` 身份转发滚动和尺寸通知，排除格内编辑器和冻结列；转发通知不向页面泄漏。绘制、命中、滑块拖动、轨道翻页和取消均交给 Flutter `RawScrollbar`。`TextFieldTapRegion` 将轨道计入表格内部交互，保留焦点和组词；仅在表内关闭桌面自动滚动条，不改变页面或全局滚动行为。旧 `HoverTableScrollbars` 的热区、隐藏计时器与指针补偿已移除。冻结列同步、可见列渲染、编辑器身份和视图恢复仍由原模块负责。
+
 曲谱库和当前草稿通过 Repository 使用应用支持目录中的版本化 JSON 文件保存。写入在同目录串行执行，并使用临时文件刷盘后替换正式文件。首次运行 v1.6.0 时，只在新文件不存在时读取旧 `SharedPreferences`；迁移成功后保留旧值作为回退副本。
 
 恢复快照使用独立 JSON 文件，单个损坏快照不影响其他快照。曲谱库和草稿分别保留最近 20 份。主数据损坏时禁止覆盖，界面必须先导出原始数据，再允许重置。

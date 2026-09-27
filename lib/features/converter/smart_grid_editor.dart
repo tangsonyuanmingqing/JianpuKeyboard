@@ -6,7 +6,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
 import '../../app/theme/app_typography.dart';
-import 'hover_table_scrollbars.dart';
+import 'table_scroll_frame.dart';
 import 'smart_grid_converter.dart';
 import 'smart_grid_codec.dart';
 import 'smart_grid_document.dart';
@@ -417,93 +417,81 @@ class SmartGridEditorState extends State<SmartGridEditor> {
                     color: Theme.of(context).colorScheme.outlineVariant),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: HoverTableScrollbars(
+              child: TableScrollFrame(
                 horizontalController: _horizontal,
                 verticalController: _vertical,
-                builder: (context, showHorizontal, showVertical) => Scrollbar(
-                  controller: _horizontal,
-                  thumbVisibility: showHorizontal,
-                  notificationPredicate: (notification) =>
-                      notification.metrics.axis == Axis.horizontal,
-                  child: Scrollbar(
-                    controller: _vertical,
-                    thumbVisibility: showVertical,
-                    notificationPredicate: (notification) =>
-                        notification.metrics.axis == Axis.vertical,
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      _viewportWidth = constraints.maxWidth;
-                      final header = _header(context);
-                      return AnimatedBuilder(
-                        animation: _horizontal,
-                        child: _frozenPane(context),
-                        builder: (context, frozenPane) {
-                          final offset = _horizontal.hasClients
-                              ? _horizontal.offset
-                              : _document.horizontalOffset;
-                          // Include one overscan column at each edge. Keep the
-                          // full scroll extent with spacers, not hidden fields.
-                          _firstVisibleColumn = (offset / _cellSize)
-                              .floor()
-                              .clamp(0, _document.columnCount - 1);
-                          _firstVisibleColumn = (_firstVisibleColumn - 1)
-                              .clamp(0, _document.columnCount - 1);
-                          _lastVisibleColumn = ((offset +
-                                      _viewportWidth -
-                                      _indexWidth -
-                                      _typeWidth) /
-                                  _cellSize)
-                              .ceil()
-                              .clamp(0, _document.columnCount - 1);
-                          return Stack(
-                            children: [
-                              SingleChildScrollView(
-                                controller: _horizontal,
-                                scrollDirection: Axis.horizontal,
-                                child: SizedBox(
-                                  width: _indexWidth +
-                                      _typeWidth +
-                                      _document.columnCount * _cellSize,
-                                  child: Column(children: [
-                                    header,
-                                    Expanded(
-                                      child: ReorderableListView.builder(
-                                        scrollController: _vertical,
-                                        // Avoid rebuilding offscreen editors
-                                        // whenever visible columns change.
-                                        scrollCacheExtent:
-                                            const ScrollCacheExtent.pixels(0),
-                                        buildDefaultDragHandles: false,
-                                        itemCount: _document.rows.length,
-                                        itemBuilder: (context, row) =>
-                                            KeyedSubtree(
-                                          key: ValueKey(_document.rows[row].id),
-                                          child: _row(context, row),
-                                        ),
-                                        onReorderItem: (oldIndex, newIndex) =>
-                                            _apply(_document.reorderGroup(
-                                                oldIndex, newIndex)),
-                                      ),
+                headerHeight: _headerHeight,
+                child: LayoutBuilder(builder: (context, constraints) {
+                  _viewportWidth = constraints.maxWidth;
+                  final header = _header(context);
+                  return AnimatedBuilder(
+                    animation: _horizontal,
+                    child: _frozenPane(context),
+                    builder: (context, frozenPane) {
+                      final offset = _horizontal.hasClients
+                          ? _horizontal.offset
+                          : _document.horizontalOffset;
+                      // Include one overscan column at each edge. Keep the
+                      // full scroll extent with spacers, not hidden fields.
+                      _firstVisibleColumn = (offset / _cellSize)
+                          .floor()
+                          .clamp(0, _document.columnCount - 1);
+                      _firstVisibleColumn = (_firstVisibleColumn - 1)
+                          .clamp(0, _document.columnCount - 1);
+                      _lastVisibleColumn = ((offset +
+                                  _viewportWidth -
+                                  _indexWidth -
+                                  _typeWidth) /
+                              _cellSize)
+                          .ceil()
+                          .clamp(0, _document.columnCount - 1);
+                      return Stack(
+                        children: [
+                          SingleChildScrollView(
+                            controller: _horizontal,
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: _indexWidth +
+                                  _typeWidth +
+                                  _document.columnCount * _cellSize,
+                              child: Column(children: [
+                                header,
+                                Expanded(
+                                  child: ReorderableListView.builder(
+                                    scrollController: _vertical,
+                                    // Avoid rebuilding offscreen editors
+                                    // whenever visible columns change.
+                                    scrollCacheExtent:
+                                        const ScrollCacheExtent.pixels(0),
+                                    buildDefaultDragHandles: false,
+                                    itemCount: _document.rows.length,
+                                    itemBuilder: (context, row) => KeyedSubtree(
+                                      key: ValueKey(_document.rows[row].id),
+                                      child: _row(context, row),
                                     ),
-                                  ]),
+                                    onReorderItem: (oldIndex, newIndex) =>
+                                        _apply(_document.reorderGroup(
+                                            oldIndex, newIndex)),
+                                  ),
                                 ),
-                              ),
-                              Positioned(
-                                left: 0,
-                                top: 0,
-                                bottom: 0,
-                                width: _indexWidth + _typeWidth,
-                                child: NotificationListener<ScrollNotification>(
-                                  onNotification: (_) => true,
-                                  child: frozenPane!,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
+                              ]),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: _indexWidth + _typeWidth,
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (_) => true,
+                              child: frozenPane!,
+                            ),
+                          ),
+                        ],
                       );
-                    }),
-                  ),
-                ),
+                    },
+                  );
+                }),
               ),
             ),
           ),
@@ -1710,102 +1698,91 @@ class _SmartGridOutputViewState extends State<SmartGridOutputView> {
             border:
                 Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             borderRadius: BorderRadius.circular(8)),
-        child: HoverTableScrollbars(
+        child: TableScrollFrame(
           horizontalController: _horizontal,
           verticalController: _vertical,
-          builder: (context, showHorizontal, showVertical) => Scrollbar(
-            controller: _horizontal,
-            thumbVisibility: showHorizontal,
-            notificationPredicate: (notification) =>
-                notification.metrics.axis == Axis.horizontal,
-            child: Scrollbar(
-              controller: _vertical,
-              thumbVisibility: showVertical,
-              notificationPredicate: (notification) =>
-                  notification.metrics.axis == Axis.vertical,
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    controller: _horizontal,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: _indexWidth +
-                          _typeWidth +
-                          widget.document.columnCount * _cellSize,
-                      child: Column(children: [
-                        SizedBox(
-                            height: _headerHeight,
-                            child: Row(children: [
-                              _cell(context, '#', _indexWidth, header: true),
-                              _cell(context, '类型', _typeWidth, header: true),
-                              for (var column = 0;
-                                  column < widget.document.columnCount;
-                                  column++)
-                                _cell(context, smartGridColumnLabel(column),
-                                    _cellSize,
-                                    header: true),
-                            ])),
-                        Expanded(
-                          child: ListView.builder(
-                            controller: _vertical,
-                            itemCount: widget.document.rows.length,
-                            itemBuilder: (context, row) => SizedBox(
-                              height: _cellSize,
-                              child: Row(children: [
-                                _cell(context, '${row + 1}', _indexWidth,
-                                    header: true),
-                                _cell(context, _rowLabel(row), _typeWidth,
-                                    header: true),
-                                for (var column = 0;
-                                    column < widget.document.columnCount;
-                                    column++)
-                                  _outputCell(context, row, column, _cellSize),
-                              ]),
-                            ),
-                          ),
+          headerHeight: _headerHeight,
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                controller: _horizontal,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: _indexWidth +
+                      _typeWidth +
+                      widget.document.columnCount * _cellSize,
+                  child: Column(children: [
+                    SizedBox(
+                        height: _headerHeight,
+                        child: Row(children: [
+                          _cell(context, '#', _indexWidth, header: true),
+                          _cell(context, '类型', _typeWidth, header: true),
+                          for (var column = 0;
+                              column < widget.document.columnCount;
+                              column++)
+                            _cell(context, smartGridColumnLabel(column),
+                                _cellSize,
+                                header: true),
+                        ])),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _vertical,
+                        itemCount: widget.document.rows.length,
+                        itemBuilder: (context, row) => SizedBox(
+                          height: _cellSize,
+                          child: Row(children: [
+                            _cell(context, '${row + 1}', _indexWidth,
+                                header: true),
+                            _cell(context, _rowLabel(row), _typeWidth,
+                                header: true),
+                            for (var column = 0;
+                                column < widget.document.columnCount;
+                                column++)
+                              _outputCell(context, row, column, _cellSize),
+                          ]),
                         ),
-                      ]),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: _indexWidth + _typeWidth,
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (_) => true,
-                      child: ColoredBox(
-                        color: Theme.of(context).colorScheme.surface,
-                        child: Column(children: [
-                          SizedBox(
-                            height: _headerHeight,
-                            child: Row(children: [
-                              _cell(context, '#', _indexWidth, header: true),
-                              _cell(context, '类型', _typeWidth, header: true),
-                            ]),
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              controller: _frozenVertical,
-                              itemCount: widget.document.rows.length,
-                              itemBuilder: (context, row) => SizedBox(
-                                height: _cellSize,
-                                child: Row(children: [
-                                  _cell(context, '${row + 1}', _indexWidth,
-                                      header: true),
-                                  _cell(context, _rowLabel(row), _typeWidth,
-                                      header: true),
-                                ]),
-                              ),
-                            ),
-                          ),
-                        ]),
                       ),
                     ),
-                  ),
-                ],
+                  ]),
+                ),
               ),
-            ),
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: _indexWidth + _typeWidth,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (_) => true,
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Column(children: [
+                      SizedBox(
+                        height: _headerHeight,
+                        child: Row(children: [
+                          _cell(context, '#', _indexWidth, header: true),
+                          _cell(context, '类型', _typeWidth, header: true),
+                        ]),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: _frozenVertical,
+                          itemCount: widget.document.rows.length,
+                          itemBuilder: (context, row) => SizedBox(
+                            height: _cellSize,
+                            child: Row(children: [
+                              _cell(context, '${row + 1}', _indexWidth,
+                                  header: true),
+                              _cell(context, _rowLabel(row), _typeWidth,
+                                  header: true),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

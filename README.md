@@ -10,7 +10,7 @@
 
 ## 当前版本
 
-V1.6.0。安装版、便携版与 SHA-256 校验文件见 [GitHub Release](https://github.com/tangsonyuanmingqing/JianpuKeyboard/releases/tag/v1.6.0)，更新内容与升级注意事项见 [v1.6.0 发布说明](docs/releases/v1.6.0.md)。
+V1.6.1。安装版、便携版与 SHA-256 校验文件见 [GitHub Release](https://github.com/tangsonyuanmingqing/JianpuKeyboard/releases/tag/v1.6.1)，更新内容与升级注意事项见 [v1.6.1 发布说明](docs/releases/v1.6.1.md)。
 
 ## 当前功能
 
@@ -111,6 +111,8 @@ D F G
 
 ## 开发方式
 
+v1.6.1 的输入、输出和曲谱库表格预览统一为有溢出时常显的双轴滑块，底部／右侧各预留 24 逻辑像素，操作滑块保留编辑焦点和组词。操作说明见[表格滚动](docs/smart-grid.md#表格滚动)，复现与验收记录见[滚动条重构验证](docs/table-scroll-validation.md)。
+
 1. 安装 Flutter SDK，并确保 `flutter` 在 PATH 中。
 2. 在项目根目录生成平台脚手架（保留现有 `lib/`、`test/`、`docs/`）：
 
@@ -163,7 +165,8 @@ flutter test -d windows integration_test/mapping_persistence_reset_restart_test.
 - [曲谱库与备份](docs/song-library.md)
 - [排版规范](docs/typography.md)
 - [路线图](docs/roadmap.md)
-- [v1.6.0 发布说明](docs/releases/v1.6.0.md)
+- [v1.6.1 发布说明](docs/releases/v1.6.1.md)
+- [v1.6.0 历史发布说明](docs/releases/v1.6.0.md)
 - [Windows 真实界面性能验证](docs/windows-ui-performance.md)
 - [Windows 打包](installer/README.md)
 - [V1.2 交付说明](docs/v1.2-spec.md)
